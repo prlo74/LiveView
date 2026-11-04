@@ -31,7 +31,25 @@ In Claude Code:
 
 Then run `/live-view`, `/agent-team`, `/agent-web` or `/agent-mini`.
 
-Requirements: Claude Code with mod support. `python3` for the Agent Web and mini monitor. Google Chrome for site snapshots and the Chrome-window fallbacks. macOS is where it is developed and tested.
+The install is the same on macOS and Windows.
+
+### Requirements
+
+| | macOS | Windows |
+|---|---|---|
+| Live pane, agent team | Claude Code with mod support | Same |
+| Agent Web, mini monitor | `python3` | Python 3 (`py` launcher or `python` on PATH), from [python.org](https://www.python.org/downloads/windows/) or `winget install Python.Python.3.12` |
+| Window | Chrome app window, else your default browser | Edge app window (built into Windows), else your default browser |
+| Mini monitor on top of other windows | Yes, when `swiftc` is installed (Xcode Command Line Tools) | No, it opens as a small Edge window |
+| Site snapshots | Google Chrome | Not yet |
+| Preview of dev servers already running | Yes | Only servers an agent starts in the session |
+| Preview of plain HTML files | Yes | Not yet |
+
+macOS is where LiveView is developed and tested. Windows support is new and hasn't been tried on a Windows machine yet, so please [open an issue](https://github.com/prlo74/LiveView/issues) if something breaks.
+
+### On a phone
+
+Claude Code draws mod panes on its mobile surface too, and the live pane has a version for it (a still screen in place of the animated one), so it should show when you follow a session from the Claude app on iPhone or iPad. Not tested yet. The Agent Web and mini monitor are served only to the computer running the session, so they don't open on a phone.
 
 ## Privacy and safety
 

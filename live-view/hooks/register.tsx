@@ -9,7 +9,7 @@ import { bump, costOf } from './metrics'
 import { narrate, pushUpdate } from './narrate'
 import { findLocalUrl, takeSnapshot } from './site'
 import { nextPlan } from './plan'
-import { foundServers, openMiniWindow, openWebWindow, scanServers, sitePreview, startWeb, webSnapshot, webUp, writeWebState } from './web'
+import { foundServers, makeTempDir, openMiniWindow, openWebWindow, scanServers, sitePreview, startWeb, webSnapshot, webUp, writeWebState } from './web'
 import type { ScreenProps } from './screen'
 
 export { testCounts, toCode, viewLines } from './lib'
@@ -243,7 +243,7 @@ async function snapTick($: EngineInterface) {
   isSnapping = true
   try {
     await update($, sites, m => (m[url] ? { ...m, [url]: { ...m[url]!, dueAt: undefined, isTaking: true } } : m))
-    snapDir ??= (await $.process.run(['mktemp', '-d', '-t', 'live-view-snaps'])).stdout.trim() || undefined
+    snapDir ??= await makeTempDir($, 'live-view-snaps')
     const gen = due.generation + 1
     const r = snapDir ? await takeSnapshot($, url, snapDir, gen) : { error: "Couldn't make a folder for snapshots" }
     const at = await $.clock.now()

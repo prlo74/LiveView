@@ -7,6 +7,32 @@ import { attentionOf } from './lib'
 /** The port tried first, so a window left open finds the server again after a reload. */
 export const WEB_PORT = 47390
 
+/** True on Windows, where the macOS tools this file runs (open, mktemp, cp, lsof, swiftc) are missing. */
+export async function isWindows($: EngineInterface): Promise<boolean> {
+  return (await $.env.get('OS')) === 'Windows_NT'
+}
+
+/** A new empty folder of the mod's own under the system's temp folder; undefined when none could be made. */
+export async function makeTempDir($: EngineInterface, name: string): Promise<string | undefined> {
+  if (!(await isWindows($))) return (await $.process.run(['mktemp', '-d', '-t', name])).stdout.trim() || undefined
+  const temp = await $.env.get('TEMP')
+  if (!temp) return undefined
+  const dir = `${temp}\\${name}-${await $.clock.now()}`
+  // writing a file makes its folders
+  await $.fs.write(`${dir}\\.keep`, '')
+  return dir
+}
+
+/** The Python to run: python3 on macOS; the py launcher or python on Windows. */
+async function pythonArgv($: EngineInterface): Promise<string[]> {
+  if (!(await isWindows($))) return ['python3']
+  for (const argv of [['py', '-3'], ['python']]) {
+    const r = await $.process.run([...argv, '--version']).catch(() => undefined)
+    if (r?.exitCode === 0) return argv
+  }
+  return ['python']
+}
+
 // Serves one folder on this machine only (127.0.0.1), never cached, quietly.
 const SERVER = `
 import http.server, functools, sys, urllib.parse, subprocess, os
@@ -43,7 +69,7 @@ class H(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if not self.ok(): return
         if self.path == '/focus-claude' and self.headers.get('X-Agent-Web') == '1':
-            subprocess.Popen(['open', '-a', 'Claude'])
+            if sys.platform == 'darwin': subprocess.Popen(['open', '-a', 'Claude'])
             self.send_response(204)
             self.end_headers()
         else:
@@ -120,12 +146,13 @@ let starting: Promise<string | undefined> | undefined
 export function startWeb($: EngineInterface): Promise<string | undefined> {
   starting ??= (async () => {
     mounts.clear()
-    dir = (await $.process.run(['mktemp', '-d', '-t', 'live-view-web'])).stdout.trim()
+    dir = await makeTempDir($, 'live-view-web')
     if (!dir) return undefined
     // the page and everything beside it (themes/): copied, so edits to the mod reach the window after a reload
-    await $.process.run(['cp', '-R', `${$.plugin.root}/web/.`, dir])
+    if (await isWindows($)) await $.process.run(['robocopy', `${$.plugin.root}\\web`, dir, '/E', '/NFL', '/NDL', '/NJH', '/NJS'])
+    else await $.process.run(['cp', '-R', `${$.plugin.root}/web/.`, dir])
     lastJson = ''
-    const child = $.process.spawn({ argv: ['python3', '-I', '-c', SERVER, dir] })
+    const child = $.process.spawn({ argv: [...(await pythonArgv($)), '-I', '-c', SERVER, dir] })
     return new Promise<string | undefined>(resolve => {
       void (async () => {
         try {
@@ -176,7 +203,8 @@ export const foundServers = () => servers
 export const webUp = () => !!url
 /** Looks for dev servers already running (one `lsof`), while the window is open. */
 export async function scanServers($: EngineInterface) {
-  if (!url) return
+  // shortcut: no lsof on Windows, so only servers an agent starts are previewed there; parse `netstat -ano` to add more
+  if (!url || (await isWindows($))) return
   const own = Number(new URL(url).port)
   const r = await $.process.run(['lsof', '-nP', '-iTCP', '-sTCP:LISTEN', '-Fcn'], { timeoutMs: 3000 })
   servers = parseListeners(r.stdout, [own, WEB_PORT])
@@ -208,8 +236,9 @@ export function isBroadFolder(root: string, homeDir: string): boolean {
 export async function sitePreview($: EngineInterface, agents: Record<string, AgentView>) {
   const p = pickPreview(agents, servers)
   if (!p || p.kind === 'server' || !dir) return p
-  if (!home) home = (await $.process.run(['printenv', 'HOME'])).stdout.trim()
-  if (!home || isBroadFolder(p.root, home)) return { kind: 'blocked' as const, root: p.root, file: p.file, agent: p.agent, rev: p.rev }
+  if (!home) home = (await $.env.get('HOME')) ?? ''
+  // shortcut: isBroadFolder knows only macOS paths, so plain-file previews stay off on Windows until it learns drive paths
+  if (!home || (await isWindows($)) || isBroadFolder(p.root, home)) return { kind: 'blocked' as const, root: p.root, file: p.file, agent: p.agent, rev: p.rev }
   let mount = mounts.get(p.root)
   if (!mount) {
     mount = `site/${mounts.size}`
@@ -236,7 +265,11 @@ export async function writeWebState($: EngineInterface, snap: ReturnType<typeof 
  */
 export async function openMiniWindow($: EngineInterface, address: string): Promise<'native' | 'chrome'> {
   const mini = `${address}?mini`
-  const home = (await $.process.run(['printenv', 'HOME'])).stdout.trim()
+  if (await isWindows($)) {
+    await openAppWindowWindows($, mini)
+    return 'chrome'
+  }
+  const home = (await $.env.get('HOME')) ?? ''
   const dir = `${home}/Library/Caches/agentweb-mini`, bin = `${dir}/agentweb-mini`, src = `${$.plugin.root}/mini/MiniWindow.swift`
   if (home) {
     // rebuilt only when the source is newer than the binary
@@ -258,8 +291,20 @@ export async function openMiniWindow($: EngineInterface, address: string): Promi
 
 /** Opens the page in a window of its own: a Chrome app window when Chrome is there, else the default browser. */
 export async function openWebWindow($: EngineInterface, address: string): Promise<'chrome' | 'browser'> {
+  if (await isWindows($)) return (await openAppWindowWindows($, address)) ? 'chrome' : 'browser'
   const app = await $.process.run(['open', '-na', 'Google Chrome', '--args', `--app=${address}`, '--new-window'])
   if (app.exitCode === 0) return 'chrome'
   await $.process.run(['open', address])
   return 'browser'
+}
+
+/**
+ * Windows: an Edge app window (Edge ships with Windows), else the default browser. `start` returns at once, as
+ * `open` does on macOS. The address has no spaces or `&`, so cmd passes it through unquoted.
+ */
+async function openAppWindowWindows($: EngineInterface, address: string): Promise<boolean> {
+  const app = await $.process.run(['cmd', '/c', 'start', 'msedge', `--app=${address}`, '--new-window']).catch(() => undefined)
+  if (app?.exitCode === 0) return true
+  await $.process.run(['explorer', address]).catch(() => undefined)
+  return false
 }
