@@ -1,0 +1,1894 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Web</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #05050a; --panel: rgba(10, 12, 20, .86); --line: #1e2a3a;
+    --cyan: #00e5ff; --yellow: #fcee0a; --red: #ff2a6d; --green: #39ff88;
+    --purple: #b36bff; --amber: #ff9f1c; --blue: #3d8bff; --dim: #94a5c2; --text: #d6f9ff;
+    --mono: 'Share Tech Mono', ui-monospace, Menlo, monospace;
+    --head: 'Rajdhani', 'Share Tech Mono', system-ui, sans-serif;
+    --panel2: #070a12; --muted: #a4b2cc; --radius: 0px;
+    --clip: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); overflow: hidden; }
+  canvas { position: fixed; inset: 0; display: block; }
+  /* a soft vignette */
+  body::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 50;
+    background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,.55) 100%); }
+  /* on a light style a black vignette greys the text, so tint it with the ink instead */
+  html[data-light] body::after { background: radial-gradient(ellipse at center, transparent 60%, rgba(29,42,107,.10) 100%); }
+  .frame { position: fixed; z-index: 10; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); clip-path: var(--clip); }
+  .frame::before { content: ''; position: absolute; left: 0; top: 0; width: 40px; height: 2px; background: var(--yellow); }
+  header.frame { top: 12px; left: 12px; right: 12px; height: 58px; display: flex; align-items: center; gap: 22px; padding: 0 18px; }
+  /* narrower windows: tighter header so the last buttons stay on screen with wide style fonts */
+  @media (max-width: 1500px) { header.frame { gap: 10px; padding: 0 12px; } header.frame .cy, header.frame #styleSel { padding-left: 8px; padding-right: 8px; letter-spacing: 0; } }
+  .brand { font-family: var(--head); font-weight: 700; font-size: 22px; letter-spacing: 1px; color: var(--text); white-space: nowrap; }
+  .kpis { display: flex; gap: 18px; flex: 1; overflow: hidden; }
+  .kpi { display: flex; flex-direction: column; min-width: 64px; }
+  .kpi b { font-family: var(--head); font-size: 22px; color: var(--cyan); line-height: 1; font-variant-numeric: lining-nums tabular-nums; }
+  .kpi span { font-size: 10px; letter-spacing: 1px; color: var(--dim); }
+  .kpi.err b { color: var(--red); } .kpi.ok b { color: var(--green); } .kpi.cost b { color: var(--yellow); }
+  .uplink { font-size: 11px; letter-spacing: 2px; white-space: nowrap; }
+  .uplink i { display: inline-block; width: 8px; height: 8px; margin-right: 6px; background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .uplink.lost { color: var(--red); } .uplink.lost i { background: var(--red); box-shadow: 0 0 8px var(--red); animation: blink 2.6s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  button.cy { font: 600 14px var(--head); letter-spacing: 1px; color: var(--bg); background: var(--cyan); border: 0; padding: 7px 14px; cursor: pointer;
+    clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px)); }
+  button.cy:hover { background: var(--yellow); }
+  button.cy.ghost { background: transparent; color: var(--cyan); outline: 1px solid var(--cyan); outline-offset: -1px; }
+  :focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+  button.cy.ghost:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+  button.cy.ghost.on { background: var(--yellow); color: var(--bg); outline-color: var(--yellow); }
+  aside.frame { top: 82px; right: 12px; bottom: 12px; width: 380px; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; transition: transform .25s; }
+  aside.hidden { transform: translateX(420px); }
+  aside h2 { margin: 0 0 6px; font: 700 24px var(--head); letter-spacing: 1px; color: var(--cyan); word-break: break-word; padding-right: 28px; }
+  aside .x { position: absolute; top: 10px; right: 12px; font: 18px var(--mono); color: var(--dim); background: none; border: 0; cursor: pointer; min-width: 32px; min-height: 32px; }
+  aside .x:hover { color: var(--text); }
+  aside .goal { margin-top: 8px; font: 600 16px var(--head); line-height: 1.3; color: var(--yellow); }
+  aside .task { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text); white-space: pre-wrap; }
+  .bars { display: flex; align-items: flex-end; gap: 3px; height: 42px; } .bars i { display: block; flex: 1; background: #1d6f86; }
+  .bars i.hot { background: var(--cyan); }
+  .sidetab { position: fixed; z-index: 11; right: 12px; top: 50%; transform: translateY(-50%); writing-mode: vertical-rl; padding: 14px 7px; background: var(--panel); border: 1px solid var(--line); color: var(--cyan); font: 600 14px var(--head); letter-spacing: 1px; cursor: pointer; }
+  .sidetab:hover { color: var(--yellow); border-color: var(--yellow); }
+  .chip { display: inline-block; font-size: 10px; letter-spacing: 1px; padding: 2px 8px; border: 1px solid currentColor; margin-right: 6px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .stats div { border-left: 2px solid var(--line); padding-left: 6px; }
+  .stats b { display: block; font: 600 18px var(--head); color: var(--text); font-variant-numeric: lining-nums tabular-nums; } .stats span { font-size: 9px; color: var(--dim); letter-spacing: 1px; }
+  .label { font-size: 10px; letter-spacing: 1.5px; color: var(--dim); margin-bottom: 6px; text-transform: uppercase; }
+  .screen { background: var(--panel2); border: 1px solid var(--line); font-size: 11.5px; line-height: 1.45; padding: 6px 0; height: 230px; overflow: hidden; position: relative; }
+  .screen .t { color: var(--dim); padding: 0 8px 4px; font-size: 10px; letter-spacing: 1px; border-bottom: 1px solid var(--line); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ln { white-space: pre; overflow: hidden; text-overflow: ellipsis; padding: 0 8px; }
+  .ln em { font-style: normal; color: var(--dim); display: inline-block; width: 34px; }
+  .ln.add { background: rgba(57,255,136,.10); color: var(--green); } .ln.cut { background: rgba(255,42,109,.12); color: var(--red); text-decoration: line-through; }
+  .ln.focus { box-shadow: inset 2px 0 var(--yellow); }
+  .log { flex: 1; overflow: hidden; font-size: 12px; }
+  .log div { padding: 3px 0; border-bottom: 1px dashed #121a28; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .log time { color: var(--dim); margin-right: 8px; }
+  .t-add { color: var(--green); } .t-cut { color: var(--red); } .t-pass { color: var(--green); } .t-fail, .t-error { color: var(--red); } .t-info { color: var(--text); }
+  .mix { display: flex; height: 6px; gap: 2px; } .mix i { display: block; height: 100%; }
+  footer.frame { left: 12px; bottom: 12px; width: min(320px, 70vw); padding: 0 12px 8px; font-size: 12px; overflow: hidden; z-index: 12; }
+  footer.open { width: min(600px, 80vw); }
+  .brief { width: 320px; max-width: calc(100vw - 24px); padding: 12px 14px 14px; z-index: 13; display: none; background: var(--panel2); border-color: var(--line); box-shadow: 0 0 24px rgba(0,229,255,.12); }
+  .brief.on { display: block; animation: brief .22s ease-out; }
+  @keyframes brief { from { opacity: 0; transform: scale(.96); filter: brightness(2); } }
+  .brief h3 { margin: 2px 0 6px; font: 700 20px var(--head); letter-spacing: 1px; color: var(--cyan); word-break: break-word; padding-right: 24px; }
+  .brief p { margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text); max-height: 180px; overflow-y: auto; white-space: pre-wrap; }
+  .brief p.none { color: var(--dim); }
+  .brief .goal { margin-top: 8px; font: 600 15px var(--head); letter-spacing: .5px; color: var(--yellow); line-height: 1.3; }
+  .brief .goal b { font-weight: 700; }
+  .brief p { max-height: 110px; }
+  .plan { max-height: 150px; overflow-y: auto; font-size: 12px; line-height: 1.55; }
+  .plan .p-completed { color: var(--green); opacity: .75; } .plan .p-in_progress { color: var(--cyan); } .plan .p-pending { color: var(--dim); }
+  .brief .now { margin-top: 10px; font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brief .now b { color: var(--text); font-weight: normal; }
+  .brief .x { position: absolute; top: 8px; right: 10px; font: 16px var(--mono); color: var(--dim); background: none; border: 0; cursor: pointer; }
+  .brief .x:hover { color: var(--red); }
+  footer .bar { display: flex; align-items: center; gap: 8px; padding: 8px 0 4px; cursor: grab; user-select: none; touch-action: none; }
+  footer .bar:active { cursor: grabbing; }
+  footer .bar .label { flex: 1; margin: 0; }
+  footer .bar button { font: 12px var(--mono, monospace); color: var(--cyan); background: transparent; border: 1px solid var(--line); padding: 1px 7px; cursor: pointer; }
+  footer .bar button:hover { color: var(--yellow); border-color: var(--yellow); }
+  #logBody { max-height: 60px; overflow: hidden; }
+  footer.open #logBody { max-height: min(420px, 55vh); overflow-y: auto; }
+  footer .row { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 1px 0; }
+  footer .row.new { animation: in .4s ease-out; }
+  footer .row b { color: var(--yellow); font-weight: normal; }
+  @keyframes in { from { opacity: 0; transform: translateX(-12px); color: #fff; } }
+  .preview { left: 12px; bottom: 110px; width: 520px; height: 360px; min-width: 260px; min-height: 180px; padding: 0; display: flex; flex-direction: column; resize: both; overflow: hidden; clip-path: none; z-index: 12; background: var(--panel2); }
+  .preview[hidden] { display: none; }
+  .preview .bar { display: flex; align-items: center; gap: 6px; padding: 7px 10px; cursor: grab; user-select: none; touch-action: none; border-bottom: 1px solid var(--line); }
+  .preview .bar:active { cursor: grabbing; }
+  .preview .bar .label { flex: 1; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: none; letter-spacing: .3px; color: var(--text); font-size: 12px; }
+  .preview .bar a, .preview .bar button { font: 13px var(--mono); color: var(--cyan); background: transparent; border: 1px solid var(--line); padding: 2px 8px; cursor: pointer; text-decoration: none; min-height: 26px; }
+  .preview .bar a:hover, .preview .bar button:hover { color: var(--yellow); border-color: var(--yellow); }
+  .preview iframe { flex: 1; width: 100%; border: 0; background: #fff; }
+  .preview .pvnote { padding: 4px 10px 6px; font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-top: 1px solid var(--line); }
+  .preview .pvnone { flex: 1; display: grid; place-items: center; padding: 20px; text-align: center; color: var(--dim); font-size: 12px; line-height: 1.6; }
+  .tabs { display: flex; gap: 2px; }
+  .tabs button { font: 600 14px var(--head); letter-spacing: 1px; color: var(--dim); background: transparent; border: 0; border-bottom: 2px solid transparent; padding: 6px 10px; cursor: pointer; min-height: 34px; }
+  .tabs button:hover { color: var(--text); }
+  .tabs button.on { color: var(--cyan); border-bottom-color: var(--cyan); }
+  .guide { position: fixed; z-index: 30; top: 82px; left: 12px; right: 12px; bottom: 12px; overflow-y: auto; background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px 40px; }
+  .guide[hidden] { display: none; }
+  .guide h1 { margin: 0 0 4px; font: 700 28px var(--head); color: var(--text); }
+  .guide > p { margin: 0 0 24px; color: var(--dim); font-size: 13px; max-width: 760px; line-height: 1.6; }
+  .guide h2 { margin: 30px 0 12px; font: 700 18px var(--head); letter-spacing: .5px; color: var(--cyan); }
+  .gg { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .gi { display: flex; gap: 14px; align-items: flex-start; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+  .gi svg { flex: none; }
+  .gi b { display: block; font: 600 15px var(--head); color: var(--text); margin-bottom: 3px; }
+  .gi span { font-size: 12px; line-height: 1.55; color: var(--muted); }
+  .fxg { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+  .fxt { display: flex; gap: 16px; align-items: center; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+  .fxt canvas { position: static; flex: none; width: 170px; height: 170px; }
+  .fxt .n { font-size: 10px; letter-spacing: 1px; color: var(--dim); }
+  .fxt h3 { margin: 2px 0 6px; font: 700 22px var(--head); letter-spacing: 1px; }
+  .fxt .k { font-size: 10px; letter-spacing: 1.5px; color: var(--yellow); margin-top: 4px; }
+  .fxt p { margin: 2px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+  .keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; font-size: 12.5px; color: var(--muted); }
+  .keys kbd { display: inline-block; min-width: 26px; text-align: center; padding: 2px 6px; margin-right: 8px; border: 1px solid var(--line); color: var(--text); font: 12px var(--mono); }
+  .kpi.att b { color: var(--amber); }
+  aside .att { margin-top: 8px; padding: 7px 9px; border: 1px solid var(--amber); color: var(--amber); font-size: 12px; line-height: 1.45; }
+  aside .att.wait { border-color: var(--yellow); color: var(--yellow); }
+  .replay { left: 50%; transform: translateX(-50%); bottom: 12px; width: min(760px, calc(100vw - 720px)); min-width: 380px; display: flex; align-items: center; gap: 10px; padding: 8px 12px; z-index: 14; clip-path: none; background: var(--panel2); border-color: var(--yellow); }
+  .replay[hidden] { display: none; }
+  .replay::before { display: none; }
+  .replay button { font: 600 13px var(--head); color: var(--text); background: transparent; border: 1px solid var(--line); padding: 4px 10px; cursor: pointer; min-height: 30px; }
+  .replay button:hover { border-color: var(--yellow); color: var(--yellow); }
+  .replay input[type=range] { flex: 1; accent-color: var(--yellow); min-width: 80px; }
+  .replay .rpt { font-size: 11px; color: var(--dim); white-space: nowrap; min-width: 140px; }
+  .replay .rpl { font: 700 12px var(--head); letter-spacing: 1px; color: var(--yellow); }
+  .preview select { font: 11px var(--mono); color: var(--text); background: var(--panel2); border: 1px solid var(--line); max-width: 180px; min-height: 26px; }
+  #styleSel { font: 600 14px var(--head); letter-spacing: .5px; color: var(--cyan); background: transparent; border: 1px solid var(--cyan); border-radius: var(--radius); padding: 6px 8px; min-height: 34px; cursor: pointer; }
+  #styleSel option { background: var(--panel2); color: var(--text); }
+  /* you are needed: after 3 quiet minutes with an approval pending, the edges glow orange and slow waves roll out */
+  .nudge { position: fixed; inset: 0; z-index: 60; pointer-events: none; display: none; }
+  .nudge { overflow: hidden; box-shadow: inset 0 0 160px 30px rgba(255,140,0,.32); }
+  .nudge.on { display: block; }
+  /* slow rings rolling out from the centre; only transform and opacity animate, so no repaint per frame */
+  .nudge::before, .nudge::after { content: ''; position: absolute; left: 50%; top: 50%; width: 40vmax; height: 40vmax; margin: -20vmax 0 0 -20vmax; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,140,0,0) 52%, rgba(255,140,0,.2) 62%, rgba(255,140,0,.07) 68%, rgba(255,140,0,0) 72%);
+    opacity: 0; transform: scale(.1); will-change: transform, opacity; animation: nudgeWave 7s cubic-bezier(.3,.55,.4,1) infinite; }
+  .nudge::after { animation-delay: 3.5s; }
+  @keyframes nudgeWave { 0% { transform: scale(.1); opacity: 0; } 18% { opacity: 1; } 100% { transform: scale(4.2); opacity: 0; } }
+  .nudge .msg { z-index: 1; position: absolute; left: 50%; top: 92px; transform: translateX(-50%); font: 700 16px var(--head); letter-spacing: .5px; color: #1d0f00; background: #ff9f1c; padding: 9px 18px; border-radius: 4px; white-space: nowrap; box-shadow: 0 0 30px rgba(255,140,0,.6); }
+  @media (prefers-reduced-motion: reduce) { .nudge::before, .nudge::after { animation: none; display: none; } .nudge { box-shadow: inset 0 0 200px 40px rgba(255,140,0,.5); }
+    .uplink.lost i, .brief.on, footer .row.new { animation: none; } aside.frame { transition: none; } }
+  /* screensaver: the backdrop and a faint picture of the agents, nothing else */
+  body.saver header, body.saver aside, body.saver .sidetab, body.saver footer, body.saver .preview, body.saver .brief, body.saver .replay, body.saver .legend, body.saver .guide { display: none !important; }
+  body.saver { cursor: none; }
+  .saverline { position: fixed; z-index: 40; left: 50%; bottom: 26px; transform: translateX(-50%); font: 14px var(--mono); letter-spacing: .5px; color: var(--muted); display: none; white-space: nowrap; }
+  body.saver .saverline { display: block; }
+  .legend { position: fixed; z-index: 10; left: 12px; top: 82px; font-size: 10px; letter-spacing: 1px; color: var(--dim); display: grid; gap: 3px; }
+  .legend i { display: inline-block; width: 10px; height: 2px; margin-right: 6px; vertical-align: middle; }
+  .empty { position: fixed; z-index: 5; inset: 0; display: grid; place-items: center; pointer-events: none; font: 600 18px var(--head); letter-spacing: 1px; color: var(--dim); }
+  /* legibility: data text no smaller than 11-12px */
+  .kpi span, .label, .stats span { font-size: 12px; } .chip { font-size: 11px; } .legend { font-size: 12px; }
+  .kpi.att { cursor: pointer; } .kpi.att:hover b { color: var(--yellow); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  /* agent rail: every agent in a list, sorted by who needs you */
+  .rail { left: 12px; top: 82px; bottom: 130px; width: 232px; display: flex; flex-direction: column; gap: 8px; padding: 12px 10px; overflow: hidden; }
+  .rail input { width: 100%; font: 13px var(--mono); color: var(--text); background: var(--panel2); border: 1px solid var(--line); padding: 5px 8px; min-height: 30px; }
+  .rchips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .rchips button { font: 600 12px var(--head); letter-spacing: .5px; color: var(--dim); background: transparent; border: 1px solid var(--line); padding: 2px 7px; cursor: pointer; min-height: 24px; }
+  .rchips button b { color: var(--text); font-weight: 600; margin-left: 3px; }
+  .rchips button:hover { color: var(--text); } .rchips button.on { color: var(--bg); background: var(--cyan); border-color: var(--cyan); } .rchips button.on b { color: var(--bg); }
+  .rlist { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+  .rrow { display: flex; gap: 8px; align-items: flex-start; text-align: left; width: 100%; padding: 5px 6px; background: transparent; border: 0; border-left: 2px solid transparent; color: var(--text); cursor: pointer; font: inherit; }
+  .rrow:hover { background: rgba(255,255,255,.05); } .rrow.sel { border-left-color: var(--yellow); background: rgba(255,255,255,.07); }
+  .rrow .dot { flex: none; width: 9px; height: 9px; margin-top: 5px; border-radius: 50%; }
+  .rrow .rt { min-width: 0; display: flex; flex-direction: column; }
+  .rrow b { font: 600 14px var(--head); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rrow em { font-style: normal; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rrow.att em { color: var(--amber); } .rrow.att.w em { color: var(--yellow); }
+  .rempty { color: var(--dim); font-size: 12px; padding: 8px 6px; }
+  .keyd summary { cursor: pointer; font: 600 13px var(--head); letter-spacing: 1px; color: var(--cyan); }
+  .keyd .legend { position: static; margin-top: 6px; }
+  .legend .lk { margin-top: 4px; line-height: 1.5; letter-spacing: 0; }
+  .legend .lkb { font: 12px var(--mono); color: var(--cyan); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+  .preview { left: 256px; }
+  @media (max-width: 899px) { .rail { display: none !important; } .preview { left: 12px; } }
+  .tip { position: fixed; z-index: 70; display: none; max-width: 290px; padding: 8px 10px; font-size: 12px; line-height: 1.45; pointer-events: none; background: var(--panel2); border: 1px solid var(--line); }
+  .tip b { font: 700 15px var(--head); color: var(--cyan); display: block; margin-bottom: 2px; } .tip .ta { color: var(--amber); margin-bottom: 2px; }
+  /* mini window (?mini): about 480x270, counts, who needs you, and a tile per agent */
+  #mini { display: none; position: fixed; z-index: 20; inset: 0; padding: 8px 10px; flex-direction: column; gap: 6px; }
+  body.mini #mini { display: flex; }
+  body.mini header, body.mini aside, body.mini .sidetab, body.mini footer, body.mini .preview, body.mini .brief, body.mini .replay, body.mini .guide, body.mini #rail, body.mini #empty, body.mini .nudge .msg, body.mini #tip { display: none !important; }
+  #mini { pointer-events: none; }
+  .mst { pointer-events: auto; cursor: pointer; display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--green); }
+  .mst b { font: 700 20px var(--head); letter-spacing: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mst span { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mst.ok { border-left-color: var(--green); } .mst.ok b { color: var(--green); }
+  .mst.warn { border-left-color: var(--amber); } .mst.warn b { color: var(--amber); }
+  .mst.need { border-left-color: var(--yellow); } .mst.need b { color: var(--yellow); }
+  .mst.bad { border-left-color: var(--red); } .mst.bad b { color: var(--red); }
+  .mst.idle { border-left-color: var(--dim); } .mst.idle b { color: var(--dim); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<header class="frame">
+  <div class="brand" id="brand">Agent Web</div>
+  <button class="cy ghost" id="backBtn" title="Back to the Claude app (C)">← Claude</button>
+  <nav class="tabs" aria-label="Pages"><button id="tabLive" class="on">Live</button><button id="tabGuide">Guide</button></nav>
+  <div class="kpis" id="kpis"></div>
+  <div class="uplink" id="uplink"><i></i><span>Live</span></div>
+  <button class="cy ghost" id="viewBtn" title="Web of agents, one-agent core, or automatic (V)">View: Auto</button>
+  <select id="styleSel" aria-label="Style" title="Style ([ and ] to step through)"></select>
+  <button class="cy ghost" id="saverBtn" title="Screensaver (Z)">Screensaver</button>
+  <button class="cy ghost" id="replayBtn" title="Scrub back through this session (R)">Replay</button>
+  <button class="cy ghost" id="siteBtn" title="Show or hide the site preview (S)">Site</button>
+  <button class="cy ghost" id="panelBtn" title="Show or hide details (Tab)">Details</button>
+  <button class="cy" id="fsBtn" title="Full screen (F)">Full screen</button>
+</header>
+<nav class="frame rail" id="rail" aria-label="Agents">
+  <input id="railQ" type="search" placeholder="Find an agent  ( / )" aria-label="Find an agent">
+  <div class="rchips" id="railChips"><button data-f="all">All<b></b></button><button data-f="working">Working<b></b></button><button data-f="need" title="Waiting on you, stuck or quiet">Needs you<b></b></button><button data-f="err">Errors<b></b></button><button data-f="done">Done<b></b></button></div>
+  <div class="rlist" id="railList"></div>
+  <details class="keyd"><summary>Key</summary><div class="legend" id="legend"></div></details>
+</nav>
+<aside class="frame" id="panel"></aside>
+<button class="sidetab" id="sideTab" title="Show details (Tab)">‹ Details</button>
+<footer class="frame" id="log">
+  <div class="bar" id="logBar" title="Drag to move. Double-click or L to expand."><div class="label">Activity</div><button id="logBtn" title="Expand or shrink (L)">▢</button></div>
+  <div id="logBody"></div>
+</footer>
+<main class="guide" id="guide" hidden aria-label="Guide">
+  <h1>What the signals mean</h1>
+  <p>Agent Web draws what each agent is doing right now. With several agents running it shows the <b>web</b>, with one it shows the <b>core</b>. Colours mean the same thing everywhere.</p>
+  <h2>Reactive effects</h2>
+  <p style="margin:-4px 0 14px;color:var(--dim);font-size:12.5px">What the core does for each thing the agent does, running live. The web view uses the same colours.</p>
+  <div class="fxg" id="fxGrid"></div>
+  <h2>Colours</h2>
+  <div class="gg">
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="8" style="fill:var(--green)"/><circle cx="17" cy="17" r="14" fill="none" stroke-opacity=".45" style="stroke:var(--green)"/></svg><div><b>Green · Edit</b><span>Writing or changing a file. Also tests passing and finished steps.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="8" style="fill:var(--cyan)"/><circle cx="17" cy="17" r="14" fill="none" stroke-opacity=".45" style="stroke:var(--cyan)"/></svg><div><b>Cyan · Read</b><span>Opening a file. Cyan is also the default for an agent that is working.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="8" style="fill:var(--yellow)"/><circle cx="17" cy="17" r="14" fill="none" stroke-opacity=".45" style="stroke:var(--yellow)"/></svg><div><b>Yellow · Search and goal</b><span>Searching the code. The goal headline and goal marker are yellow too.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="8" style="fill:var(--amber)"/><circle cx="17" cy="17" r="14" fill="none" stroke-opacity=".45" style="stroke:var(--amber)"/></svg><div><b>Amber · Run</b><span>Running a command or the tests.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="8" style="fill:var(--blue)"/><circle cx="17" cy="17" r="14" fill="none" stroke-opacity=".45" style="stroke:var(--blue)"/></svg><div><b>Blue · Web</b><span>Browsing or fetching a web page.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="8" style="fill:var(--purple)"/><circle cx="17" cy="17" r="14" fill="none" stroke-opacity=".45" style="stroke:var(--purple)"/></svg><div><b>Purple · Helper</b><span>Handing work to a helper agent.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="8" style="fill:var(--red)"/><circle cx="17" cy="17" r="14" fill="none" stroke-opacity=".45" style="stroke:var(--red)"/></svg><div><b>Red · Error</b><span>A tool call failed or was denied, or tests failed.</span></div></div>
+  </div>
+  <h2>Web view: several agents</h2>
+  <div class="gg">
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><polygon points="17,4 28,10.5 28,23.5 17,30 6,23.5 6,10.5" fill="#0a0d16" stroke-width="1.6" style="stroke:var(--cyan)"/></svg><div><b>Hexagon</b><span>One agent. The main agent is the big one in the middle; helpers sit round it, their own helpers further out. It glows while working.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="13" fill="none" stroke-width="3" stroke-dasharray="30 52" style="stroke:var(--green)"/><circle cx="17" cy="17" r="13" fill="none" stroke-width="3" stroke-dasharray="20 62" stroke-dashoffset="-32" style="stroke:var(--amber)"/><circle cx="17" cy="17" r="13" fill="none" stroke-width="3" stroke-dasharray="18 64" stroke-dashoffset="-54" style="stroke:var(--cyan)"/></svg><div><b>Coloured outer ring</b><span>Which tools the agent has used, in proportion.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="13" fill="none" stroke-width="1.5" stroke-dasharray="3 6" style="stroke:var(--cyan)"/></svg><div><b>Dashed spinning ring</b><span>Spins faster the more actions it took in the last 30 seconds.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><text x="2" y="21" font-size="9" font-family="monospace" style="fill:var(--cyan)">const ▸</text></svg><div><b>Strings of code</b><span>Each line to the parent is made of the code the helper is looking at, scrolling toward the parent. Dim when idle.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><line x1="2" y1="17" x2="32" y2="17" stroke="#7a8ba8" stroke-dasharray="2 3"/><rect x="18" y="12" width="9" height="9" transform="rotate(45 22.5 16.5)" style="fill:var(--green)"/></svg><div><b>Flash along a string</b><span>An update sent to the parent, in the colour of what happened. Purple “New helper” travels out; green “Done” travels back.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="2" y="15" width="6" height="4" style="fill:var(--cyan)"/><rect x="10" y="15" width="6" height="4" style="fill:var(--green)"/><rect x="18" y="15" width="6" height="4" style="fill:var(--amber)"/><rect x="26" y="15" width="6" height="4" style="fill:var(--red)"/></svg><div><b>Strip of cells</b><span>Its last 12 actions, newest on the right. A blinking cell is still running.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="2" y="11" width="30" height="12" style="fill:var(--green)"/><text x="17" y="20" text-anchor="middle" font-size="8" font-family="sans-serif" fill="#05050a">✓ 12</text></svg><div><b>Banner</b><span>Tests passed or failed, the agent finished, or an error. Shows for a few seconds.</span></div></div>
+  </div>
+  <h2>Core view: one agent</h2>
+  <div class="gg">
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="11" fill="#0a3a66" stroke-opacity=".5" style="stroke:var(--cyan)"/><circle cx="12" cy="14" r="1.6" fill="#6fe9ff"/><circle cx="20" cy="12" r="1.6" fill="#6fe9ff"/><circle cx="19" cy="21" r="1.6" fill="#6fe9ff"/><line x1="12" y1="14" x2="20" y2="12" stroke="#6fe9ff" stroke-opacity=".6"/><line x1="20" y1="12" x2="19" y2="21" stroke="#6fe9ff" stroke-opacity=".6"/></svg><div><b>Sphere</b><span>The agent. Neurons are linked to their nearest neighbours; the sphere breathes while it works.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><polyline points="4,28 12,20 19,22 27,9" fill="none" stroke-width="2" style="stroke:var(--green)"/><circle cx="27" cy="9" r="3" fill="#fff"/></svg><div><b>Chain of neurons firing</b><span>Every action fires a chain from the centre toward the current step, in the action’s colour. A white dot marks its head. A running command keeps firing until it ends.</span></div></div>
+    
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="9" cy="12" r="1.5" fill="#6fe9ff"/><circle cx="24" cy="9" r="2.6" fill="#d6f9ff"/><circle cx="15" cy="24" r="1.5" fill="#6fe9ff"/><circle cx="27" cy="23" r="1.5" fill="#6fe9ff"/></svg><div><b>Flicker</b><span>Background neurons blink more as the agent gets busier.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><g stroke="#9ff3ff" stroke-opacity=".7"><line x1="17" y1="2" x2="17" y2="8"/><line x1="32" y1="17" x2="26" y2="17"/><line x1="17" y1="32" x2="17" y2="24"/><line x1="2" y1="17" x2="10" y2="17"/><line x1="27.6" y1="6.4" x2="24" y2="10"/><line x1="6.4" y1="27.6" x2="9" y2="25"/></g></svg><div><b>Tick rings</b><span>Turn faster the more actions in the last 30 seconds.</span></div></div>
+    
+    
+    
+    
+    
+    
+  </div>
+  <h2>Plan and goal</h2>
+  <div class="gg">
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="12" fill="none" stroke-width="2" stroke-dasharray="14 5" style="stroke:var(--yellow)"/><circle cx="17" cy="17" r="3.5" style="fill:var(--yellow)"/></svg><div><b>Goal</b><span>The first sentence of the agent’s task, shown top left with a progress bar. The marker at the end of the orbit turns green when every step is done, and the whole network flares.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><ellipse cx="17" cy="17" rx="15" ry="8" fill="none" stroke="#4a5b78" stroke-dasharray="2 3"/><path d="M2 17 A15 8 0 0 0 17 25" fill="none" stroke-width="2.5" style="stroke:var(--green)"/><circle cx="17" cy="25" r="3" style="fill:var(--cyan)"/><circle cx="31" cy="15" r="2.5" fill="#05050a" stroke="#7a8ba8"/></svg><div><b>Orbit of steps</b><span>The steps from the agent’s to-do list. Green up to the current step, pulsing on the current one, dim dashes for what is next.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><polygon points="17,6 26.5,11.5 26.5,22.5 17,28 7.5,22.5 7.5,11.5" fill="none" style="stroke:var(--green)"/><circle cx="17" cy="17" r="4" style="fill:var(--green)"/></svg><div><b>Green hex on a step</b><span>That step is done. Sparks fly when it is ticked off.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="2" y="15" width="6" height="4" style="fill:var(--cyan)"/><rect x="10" y="15" width="6" height="4" style="fill:var(--green)"/><rect x="18" y="15" width="6" height="4" style="fill:var(--amber)"/><rect x="26" y="15" width="6" height="4" style="fill:var(--red)"/></svg><div><b>No plan written</b><span>When the agent never writes a to-do list, the bar and orbit show its last actions instead, ending in “Next action”.</span></div></div>
+  </div>
+  <h2>Alerts</h2>
+  <div class="gg">
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="11" width="32" height="12" style="fill:var(--yellow)"/><text x="17" y="20" text-anchor="middle" font-size="7.5" font-weight="700" font-family="sans-serif" fill="#05050a">Needs you</text></svg><div><b>Needs you</b><span>The agent is waiting for you to approve something in Claude. Shown once it has waited 30 seconds, until that tool call ends; asks that auto mode answers for you are left out. The window title shows how many are waiting.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="11" width="32" height="12" style="fill:var(--amber)"/><text x="17" y="20" text-anchor="middle" font-size="7.5" font-weight="700" font-family="sans-serif" fill="#05050a">Stuck</text></svg><div><b>Stuck</b><span>Its last 3 actions failed, or the same action failed 3 times in a row.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="11" width="32" height="12" style="fill:var(--amber)"/><text x="17" y="20" text-anchor="middle" font-size="7.5" font-weight="700" font-family="sans-serif" fill="#05050a">Struggling</text></svg><div><b>Struggling</b><span>At least 5 of its last 10 actions failed.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="11" width="32" height="12" style="fill:var(--amber)"/><text x="17" y="20" text-anchor="middle" font-size="7.5" font-weight="700" font-family="sans-serif" fill="#05050a">Quiet</text></svg><div><b>Quiet</b><span>Marked working but no action for over 3 minutes. It may be thinking on a long answer.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><g stroke-width="1.6"><line x1="17" y1="17" x2="17" y2="5" style="stroke:var(--yellow)"/><line x1="17" y1="17" x2="28" y2="11" style="stroke:var(--green)"/><line x1="17" y1="17" x2="27" y2="25" style="stroke:var(--cyan)"/><line x1="17" y1="17" x2="7" y2="26" style="stroke:var(--purple)"/><line x1="17" y1="17" x2="6" y2="10" style="stroke:var(--amber)"/></g></svg><div><b>Fireworks</b><span>The project is done: the main agent ticked off its whole plan, or every helper finished and the main agent stopped. Once per project.</span></div></div>
+  </div>
+  <h2>Styles and screensaver</h2>
+  <div class="gg">
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="11" cy="12" r="6" fill="#3f74c9"/><circle cx="23" cy="12" r="6" fill="#ffd6f0"/><circle cx="11" cy="24" r="6" fill="#e69a2e"/><circle cx="23" cy="24" r="6" style="fill:var(--green)"/></svg><div><b>Styles</b><span>Pick one from the Style menu in the header: from plain and high-contrast looks for daytime work to calm, slowly moving scenes that double as a screensaver. A style changes the look only: colours keep their meaning, and every alert works the same. Your choice is remembered.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="12" fill="none" stroke="#7a8ba8"/><path d="M12 20 Q17 10 22 20" fill="none" stroke="#7a8ba8"/></svg><div><b>Screensaver</b><span>After 10 minutes without mouse or keyboard, or press Z. The panels hide, the background keeps slowly morphing, the agents stay faintly visible, and a line at the bottom says what is going on. Any key or mouse move brings everything back.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="2" y="2" width="30" height="30" rx="3" fill="none" stroke-width="4" stroke-opacity=".8" style="stroke:var(--amber)"/></svg><div><b>Orange wave</b><span>An agent has been waiting for your approval and nothing has changed for over a minute: the screen edges glow orange, slow waves roll out from the centre, and a note says who is waiting. It shows over the screensaver too. Answer in the Claude app.</span></div></div>
+  </div>
+  <h2>Panels</h2>
+  <div class="gg">
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="8" style="fill:var(--cyan)"/><circle cx="17" cy="17" r="14" fill="none" stroke-opacity=".45" style="stroke:var(--cyan)"/></svg><div><b>Details sidebar</b><span>Goal, task, plan, stats, activity in the last minute, the code it is working in, and its history. Tab or the edge tab shows and hides it.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="8" fill="#7a8ba8"/><circle cx="17" cy="17" r="14" fill="none" stroke="#7a8ba8" stroke-opacity=".45"/></svg><div><b>Task card</b><span>In the web view, click an agent for its goal, plan and what it is doing now.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="8" style="fill:var(--yellow)"/><circle cx="17" cy="17" r="14" fill="none" stroke-opacity=".45" style="stroke:var(--yellow)"/></svg><div><b>Activity</b><span>Every update from every agent, newest first. Drag its bar to move it; expand it to see more.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="8" style="fill:var(--blue)"/><circle cx="17" cy="17" r="14" fill="none" stroke-opacity=".45" style="stroke:var(--blue)"/></svg><div><b>Site preview</b><span>The site being built. A plain HTML site is read from its files and reloads after each edit; a site with a dev server shows that server. Drag to move, drag the corner to resize.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="8" style="fill:var(--blue)"/><circle cx="17" cy="17" r="14" fill="none" stroke-opacity=".45" style="stroke:var(--blue)"/></svg><div><b>Servers already running</b><span>Dev servers started on this Mac (by an agent or by you) are found every few seconds. Pick one from the menu in the preview, or leave it on Auto.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><line x1="3" y1="17" x2="31" y2="17" stroke="#7a8ba8" stroke-width="2"/><circle cx="12" cy="17" r="4" style="fill:var(--yellow)"/></svg><div><b>Replay</b><span>Scrub back through everything since this window opened, or play it back at 1×, 4× or 16×. Back to live returns to now.</span></div></div>
+    <div class="gi"><svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="8" fill="#7a8ba8"/><circle cx="17" cy="17" r="14" fill="none" stroke="#7a8ba8" stroke-opacity=".45"/></svg><div><b>Power saving</b><span>Draws fewer frames and drops the glow when the window is in the background or the Mac is on battery.</span></div></div>
+  </div>
+  <h2>Keys</h2>
+  <div class="keys"><div><kbd>V</kbd>Web, core or automatic</div><div><kbd>Tab</kbd>Details sidebar</div><div><kbd>S</kbd>Site preview</div><div><kbd>R</kbd>Replay</div><div><kbd>Z</kbd>Screensaver</div><div><kbd>[</kbd> <kbd>]</kbd>Previous or next style</div><div><kbd>N</kbd>Jump to the next agent that needs you</div><div><kbd>A</kbd>Agent list</div><div><kbd>/</kbd>Find an agent</div><div><kbd>←</kbd> <kbd>→</kbd>Pick an agent (with the canvas focused)</div><div><kbd>L</kbd>Expand the activity box</div><div><kbd>G</kbd>This guide</div><div><kbd>C</kbd>Back to the Claude app</div><div><kbd>F</kbd>Full screen</div><div><kbd>Esc</kbd>Close a card or the guide</div></div>
+</main>
+<div class="frame replay" id="replay" hidden role="group" aria-label="Replay">
+  <span class="rpl">REPLAY</span>
+  <button id="rpPlay" aria-label="Play or pause">▶</button>
+  <input type="range" id="rpRange" min="0" max="0" value="0" aria-label="Position in the session">
+  <span class="rpt" id="rpTime"></span>
+  <button id="rpSpeed" title="Playback speed">4×</button>
+  <button id="rpLive" title="Back to live (R)">Back to live</button>
+</div>
+<div class="frame brief" id="brief"></div>
+<div class="nudge" id="nudge" role="alert" aria-live="assertive"><div class="msg" id="nudgeMsg"></div></div>
+<div class="saverline" id="saverLine"></div>
+<div class="tip" id="tip" role="tooltip"></div>
+<div class="sr" id="live" aria-live="polite"></div>
+<div id="mini"></div>
+<section class="frame preview" id="preview" hidden aria-label="Site preview">
+  <div class="bar" id="pvBar" title="Drag to move. Drag the bottom-right corner to resize."><div class="label" id="pvTitle">Site preview</div><select id="pvPick" aria-label="Which site to preview"><option value="auto">Auto</option></select><button id="pvReload" title="Reload" aria-label="Reload preview">⟳</button><a id="pvOpen" href="#" target="_blank" rel="noopener" title="Open in a new tab" aria-label="Open in a new tab">↗</a><button id="pvClose" title="Hide (S)" aria-label="Hide preview">×</button></div>
+  <iframe id="pvFrame" title="Site being built" sandbox="allow-scripts allow-forms allow-popups"></iframe>
+  <div class="pvnone" id="pvNone">No site yet. When an agent edits an HTML file, or starts a dev server, the site shows here and updates as it changes.</div>
+  <div class="pvnote" id="pvNote"></div>
+</section>
+<div class="empty" id="empty">Waiting for agents…</div>
+<script>
+'use strict'
+// ---------- palette ----------
+const C = { bg: '#05050a', cyan: '#00e5ff', yellow: '#fcee0a', red: '#ff2a6d', green: '#39ff88', purple: '#b36bff', amber: '#ff9f1c', blue: '#3d8bff', dim: '#7a8ba8', line: '#1e2a3a', text: '#d6f9ff',
+  // the parts of a drawing a style may recolour: soft inks, the network, the sphere's glow (as "r,g,b" where alpha varies)
+  muted: '#8696b2', todo: '#4a5b78', doneInk: '#a7e8c2', ink2: '#d6f9ff', nodeFill: '#0a0d16', chip: 'rgba(5,8,14,.68)', labelBg: 'rgba(5,8,14,.88)',
+  link: 'rgba(95,216,245,.2)', neuron: 'rgba(111,233,255,.75)', shell: 'rgba(0,229,255,.35)', wire: 'rgba(111,233,255,.12)', packet: '#ffffff',
+  accentRGB: '0,229,255', goalRGB: '252,238,10', tickRGB: '159,243,255', glow0: '191,246,255', glow1: '0,168,214', glow2: '10,58,102' }
+const F = { mono: '"Share Tech Mono", ui-monospace, monospace', head: 'Rajdhani, system-ui, sans-serif' }
+const KIND = { edit: C.green, read: C.cyan, search: C.yellow, run: C.amber, browse: C.blue, agent: C.purple, other: C.dim }
+const KIND_NAME = { edit: 'Edit', read: 'Read', search: 'Search', run: 'Run', browse: 'Web', agent: 'Helper', other: 'Tool' }
+const TONE = { add: C.green, cut: C.red, pass: C.green, fail: C.red, error: C.red, info: C.cyan }
+const toolKind = t => /^(Edit|Write|MultiEdit|NotebookEdit)$/.test(t) ? 'edit' : t === 'Read' ? 'read' : /^(Grep|Glob)$/.test(t) ? 'search'
+  : t === 'Bash' ? 'run' : /^(WebFetch|WebSearch)$|Browser|chrome/i.test(t) ? 'browse' : /^(Agent|Task)$/.test(t) ? 'agent' : 'other'
+const esc = s => String(s ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch])
+const cut = (s, n) => (s = String(s ?? ''), s.length > n ? s.slice(0, n - 1) + '…' : s)
+const ago = at => { const s = Math.max(0, Math.round((Date.now() - at) / 1000)); return s < 5 ? 'now' : s < 60 ? s + 's' : s < 3600 ? Math.floor(s / 60) + 'm' : Math.floor(s / 3600) + 'h' }
+const clock = at => new Date(at).toTimeString().slice(0, 8)
+const lerp = (a, b, k) => a + (b - a) * k
+const HEX = '0123456789ABCDEF'
+
+// ---------- live state ----------
+const cv = document.getElementById('c'), g = cv.getContext('2d')
+let W = 0, H = 0, DPR = 1
+const nodes = new Map()       // id -> view state (position, effects, what was seen)
+let snap = { agents: [], series: [], sites: [] }
+let focusId = 'main', hoverId = null, firstApply = true, lastOk = 0
+const pulses = [], sparks = [], logRows = []
+
+function resize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1); W = innerWidth; H = innerHeight
+  cv.width = W * DPR; cv.height = H * DPR; cv.style.width = W + 'px'; cv.style.height = H + 'px'
+}
+resize()
+
+const rootOf = list => list.find(a => a.id === 'main') || list.find(a => !a.parentId) || list[0]
+const parentOf = (a, root) => (a.id === root.id ? null : nodes.has(a.parentId) && a.parentId !== a.id ? a.parentId : root.id)
+
+/** Takes a new snapshot: finds what changed since the last one and turns it into pulses, effects and log rows. */
+function apply(next, quiet) {
+  const calm = firstApply || quiet
+  snap = next
+  const list = next.agents || []
+  const root = rootOf(list)
+  for (const a of list) {
+    let n = nodes.get(a.id)
+    const isNew = !n
+    // a new node grows out of its parent
+    const from = nodes.get(a.parentId) || nodes.get(root && root.id) || { x: W / 2, y: H / 2 }
+    if (!n) { n = { id: a.id, x: from.x, y: from.y, born: Date.now(), fxId: a.fx && a.fx.id, upAt: 0, glitch: 0, ripple: 0, typedAt: 0, flash: 0 }; nodes.set(a.id, n) }
+    n.a = a
+    // a plan step just cleared: sparks and a flash on that step (or the objective, when it was the last)
+    const plan = a.plan || [], cleared = plan.filter(s => s.status === 'completed').length
+    if (n.planDone !== undefined && cleared > n.planDone && !calm) {
+      n.burst = true; n.clearAt = Date.now()
+      n.clearIdx = cleared === plan.length ? plan.length : plan.map(s => s.status).lastIndexOf('completed')
+    }
+    n.planDone = cleared
+    const last = a.updates[a.updates.length - 1]
+    if (isNew && !calm && root && a.id !== root.id) firePulse(a.id, -1, C.purple, 'New helper')
+    if (isNew && last) n.upAt = last.at
+    if (!isNew && last && last.at > n.upAt) {
+      n.upAt = last.at; n.typedAt = Date.now()
+      if (!calm) {
+        if (root && a.id !== root.id) firePulse(a.id, +1, TONE[last.tone] || C.cyan, '')
+        else n.ripple = Date.now()
+        pushLog(a, last)
+      }
+    }
+    // an agent waiting on you, or stuck: logged once when it starts
+    const att = attention(a, Date.now()), attKey = att && att.kind + att.text.split(' · ')[0]
+    if (attKey && attKey !== n.attKey && !calm) pushLog(a, { at: Date.now(), text: att.text, tone: 'fail' })
+    n.attKey = attKey
+    // for the core view: each new action fires neurons; a failed one misfires; an edit carries its +N
+    const ls = a.steps[a.steps.length - 1]
+    if (ls && !calm) {
+      if (ls.at !== n.firedAt) (n.fireQ = n.fireQ || []).push({ kind: ls.isError ? 'error' : ls.kind })
+      if (ls.isError && n.errSeen !== ls.at) { n.errSeen = ls.at; n.errAt = Date.now(); (n.fireQ = n.fireQ || []).push({ kind: 'error' }) }
+    }
+    if (ls) { n.firedAt = ls.at; if (calm && ls.isError) n.errSeen = ls.at }
+    if (a.fx && a.fx.id !== n.fxId) {
+      n.fxId = a.fx.id
+      if (!calm) {
+        fxBurst(n, a.fx)
+        if (/add|cut/.test(a.fx.kind) && a.fx.size) (n.fireQ = n.fireQ || []).push({ kind: 'edit', size: (a.fx.kind === 'add' ? '+' : '−') + a.fx.size })
+      }
+    }
+    // the string's code: what the agent is looking at, else what it said
+    const code = a.screen ? a.screen.lines.map(l => l.text.trim()).filter(Boolean).join('  ⏵  ') : ''
+    n.code = code || a.updates.map(u => u.text).join('  ⏵  ') || n.code || Array.from({ length: 80 }, () => HEX[Math.random() * 16 | 0]).join('')
+  }
+  for (const id of [...nodes.keys()]) if (!list.some(a => a.id === id)) nodes.delete(id)
+  if (firstApply) { for (const a of list) for (const u of a.updates.slice(-2)) pushLog(a, u, true); logRows.sort((x, y) => y.at - x.at); renderLog() }
+  firstApply = false
+  if (!nodes.has(focusId) && root) focusId = root.id
+  // the project is done: the main plan all ticked off, or every helper finished and the main agent stopped
+  const rp = (root && root.plan) || [], helpers = list.filter(a => root && a.id !== root.id)
+  const doneKey = rp.length >= 2 && rp.every(x => x.status === 'completed') ? 'plan:' + rp.map(x => x.text).join('|')
+    : helpers.length && helpers.every(h => h.status === 'done') && root && root.status !== 'working' ? 'team:' + helpers.map(h => h.id).sort().join(',') : null
+  if (doneKey && !celebrated.has(doneKey)) { celebrated.add(doneKey); if (!calm) launchFireworks((root && root.goal) || 'Every agent finished') }
+  layout(); renderHud(); renderPanel(); renderBrief(); setPreview(choosePreview(next)); updateNudge()
+}
+const celebrated = new Set()
+
+function firePulse(id, dir, color, label) {
+  pulses.push({ id, dir, color, label, t0: Date.now(), dur: 1100 })
+  const n = nodes.get(id); if (n) n.flash = Date.now()
+}
+
+function fxBurst(n, fx) {
+  const color = { add: C.green, cut: C.red, error: C.red, fail: C.red, pass: C.green, spawn: C.purple, done: C.green, search: C.yellow, run: C.amber, browse: C.blue }[fx.kind] || C.cyan
+  if (fx.kind === 'error' || fx.kind === 'fail') n.glitch = Date.now()
+  const count = fx.kind === 'add' || fx.kind === 'cut' ? Math.min(40, 8 + fx.size) : fx.kind === 'done' || fx.kind === 'pass' ? 36 : 10
+  for (let i = 0; i < count; i++) {
+    const ang = Math.random() * Math.PI * 2, sp = 0.6 + Math.random() * 2.4
+    sparks.push({ x: n.x, y: n.y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - (fx.kind === 'add' ? 1 : 0), life: 1, color,
+      ch: fx.kind === 'add' ? '+' : fx.kind === 'cut' ? '-' : fx.kind === 'done' || fx.kind === 'pass' ? '✓' : HEX[Math.random() * 16 | 0] })
+  }
+  n.fx = { ...fx, color, t0: Date.now() }
+  if (fx.kind === 'done') { const root = rootOf(snap.agents); if (root && n.id !== root.id) firePulse(n.id, +1, C.green, 'Done') }
+}
+
+function pushLog(a, u, quiet) {
+  logRows.unshift({ at: u.at, who: a.label, text: u.text, tone: u.tone })
+  logRows.length = Math.min(logRows.length, 40)
+  if (!quiet) renderLog(true)
+}
+
+/** Spider-web layout: the main agent in the centre, its helpers on a ring, their helpers further out. */
+function layout() {
+  const list = snap.agents || []
+  const root = rootOf(list); if (!root) return
+  const m = coreAgent(list)
+  layout.mission = m ? m.id : null; layout.root = root.id
+  document.getElementById('rail').style.display = railWidth() ? '' : 'none'
+  syncSideTab()
+  if (m) { layout.cx = 0; coreLayout(m); return }
+  const rl = railWidth(), aw = W - rl - (panelOpen() ? 400 : 0), cx = rl + aw / 2, cy = H / 2 + 20
+  const R = Math.max(150, Math.min(aw / 2 - 110, (H - 200) / 2) * 0.78)
+  const kids = id => list.filter(a => a.id !== root.id && parentOf(a, root) === id)
+  const place = (id, x, y, ring, a0, a1) => {
+    const n = nodes.get(id); n.tx = x; n.ty = y; n.ring = ring
+    const ks = kids(id); if (!ks.length) return
+    const step = (a1 - a0) / ks.length
+    ks.forEach((k, i) => {
+      const ang = a0 + step * (i + 0.5)
+      // many helpers on one ring: stagger in and out so the cards do not overlap
+      const r = ring === 0 ? R * (ks.length > 8 ? (i % 2 ? 1.12 : 0.86) : 1) : R * 0.55
+      place(k.id, x + Math.cos(ang) * r, y + Math.sin(ang) * r, ring + 1, ang - step / 2.4, ang + step / 2.4)
+    })
+  }
+  place(root.id, cx, cy, 0, -Math.PI / 2, Math.PI * 1.5)
+  layout.cx = cx; layout.cy = cy; layout.R = R; layout.root = root.id
+}
+const panelOpen = () => !document.getElementById('panel').classList.contains('hidden')
+
+// ---------- drawing ----------
+function hexPath(x, y, r) {
+  g.beginPath()
+  for (let i = 0; i < 6; i++) { const t = Math.PI / 6 + i * Math.PI / 3; g[i ? 'lineTo' : 'moveTo'](x + Math.cos(t) * r, y + Math.sin(t) * r) }
+  g.closePath()
+}
+
+/** Seconds for slow background motion; frozen when the Mac asks for reduced motion. */
+const motionT = now => (REDUCED.matches ? 0 : (now % 86400000) / 1000)
+function drawBackdrop(now) {
+  const L = layout.mission && layout.core
+  const b = { W, H, now, t: motionT(now), cx: L ? L.cx : layout.cx || W / 2, cy: L ? L.cy : layout.cy || H / 2, R: L ? L.R : layout.R || 200, low: LOW, core: !!layout.mission, saver: document.body.classList.contains('saver') }
+  // a zero-size window (hidden, or squashed flat) has nothing to paint, and offscreen layers of size 0 cannot be drawn
+  if (W < 2 || H < 2) return
+  g.save(); ((theme && theme.backdrop) || neonBackdrop)(g, b); g.restore()
+  g.setTransform(DPR, 0, 0, DPR, 0, 0); g.globalAlpha = 1; g.shadowBlur = 0
+  if (theme && theme.webSilk === false) return
+  const { cx, cy, R } = layout; if (!cx) return
+  // the web's silk: sagging rings across the spokes
+  const spokes = Math.max(10, [...nodes.values()].filter(n => n.ring === 1).length)
+  g.lineWidth = 1
+  for (let k = 1; k <= 5; k++) {
+    const r = R * 1.35 * k / 5
+    g.strokeStyle = `rgba(${C.accentRGB},${0.05 + 0.02 * (5 - k)})`
+    g.setLineDash(k % 2 ? [2, 6] : [])
+    g.beginPath()
+    for (let i = 0; i <= spokes; i++) {
+      const t = -Math.PI / 2 + i / spokes * Math.PI * 2, sag = r * (0.93 + 0.07 * Math.cos(i * 1.7 + k))
+      g[i ? 'lineTo' : 'moveTo'](cx + Math.cos(t) * sag, cy + Math.sin(t) * sag)
+    }
+    g.stroke()
+  }
+  g.setLineDash([])
+  for (let i = 0; i < spokes; i++) {
+    const t = -Math.PI / 2 + i / spokes * Math.PI * 2
+    g.strokeStyle = `rgba(${C.accentRGB},.05)`; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(t) * R * 1.45, cy + Math.sin(t) * R * 1.45); g.stroke()
+  }
+  // targeting reticle round the core
+  g.save(); g.translate(cx, cy); g.rotate(now / 9000)
+  g.strokeStyle = `rgba(${C.goalRGB},.18)`; g.lineWidth = 1
+  for (let i = 0; i < 48; i++) { const t = i / 48 * Math.PI * 2, l = i % 4 ? 4 : 10; g.beginPath(); g.moveTo(Math.cos(t) * 92, Math.sin(t) * 92); g.lineTo(Math.cos(t) * (92 + l), Math.sin(t) * (92 + l)); g.stroke() }
+  g.restore()
+}
+
+/** A string of the web: the helper's code, scrolling toward its parent, lit where a pulse passes. */
+function drawString(child, parent, now) {
+  const dx = parent.x - child.x, dy = parent.y - child.y, len = Math.hypot(dx, dy)
+  if (len < 140) return
+  const ang = Math.atan2(dy, dx), ux = dx / len, uy = dy / len
+  const flip = Math.abs(ang) > Math.PI / 2 ? ang + Math.PI : ang
+  const a = child.a, working = a.status === 'working'
+  const myPulses = pulses.filter(p => p.id === child.id)
+  const flash = Math.max(0, 1 - (now - child.flash) / 500)
+  // the string runs from the child's rings to the parent's rings
+  const start = 52, end = len - (parent.id === layout.root ? 72 : 52)
+  const step = 8.5, chars = Math.floor((end - start) / step), speed = working ? 0.028 : 0.006
+  const off = (now * speed) % step, shift = Math.floor(now * speed / step)
+  const code = child.code
+  g.save(); g.font = `11px ${F.mono}`; g.textAlign = 'center'; g.textBaseline = 'middle'
+  for (let i = 0; i < chars; i++) {
+    const d = start + i * step + off         // distance from the child
+    const px = child.x + ux * d, py = child.y + uy * d
+    const ch = code[((i - shift) % code.length + code.length) % code.length]
+    if (ch === ' ') continue
+    let glow = 0, col = null
+    for (const p of myPulses) {
+      const k = (now - p.t0) / p.dur, at = (p.dir > 0 ? k : 1 - k) * len
+      const near = 1 - Math.abs(at - d) / 70
+      if (near > glow) { glow = near; col = p.color }
+    }
+    g.globalAlpha = Math.min(1, (working ? 0.6 : 0.22) + glow * 0.9 + flash * 0.4)
+    g.fillStyle = glow > 0.05 ? col : working ? C.cyan : C.dim
+    g.shadowBlur = glow > 0.6 ? 12 : 0; if (glow > 0.6) g.shadowColor = col
+    g.setTransform(DPR, 0, 0, DPR, 0, 0); g.translate(px, py); g.rotate(flip)
+    g.fillText(ch, 0, 0)
+  }
+  g.restore()
+  // pulse heads: a bright packet and its label
+  for (const p of myPulses) {
+    const k = (now - p.t0) / p.dur, d = (p.dir > 0 ? k : 1 - k) * len
+    const px = child.x + ux * d, py = child.y + uy * d
+    g.save(); g.shadowColor = p.color; g.shadowBlur = 22; g.fillStyle = p.color
+    g.translate(px, py); g.rotate(ang + Math.PI / 4); g.fillRect(-5, -5, 10, 10); g.restore()
+    if (p.label) { g.font = `600 12px ${F.head}`; g.fillStyle = p.color; g.textAlign = 'left'; g.fillText(p.label, px + 10, py - 12) }
+  }
+}
+
+function currentKind(a, now) {
+  const s = a.steps[a.steps.length - 1]
+  if (!s) return null
+  if (!s.isDone || now - (s.endAt || s.at) < 2600) return s.isError ? 'error' : s.kind
+  return null
+}
+
+/** One agent: hexagon, tool-mix ring, activity ring, a live glyph for what it is doing, and its card. */
+function drawNode(n, now) {
+  const a = n.a, isRoot = n.id === layout.root
+  const r = isRoot ? 50 : 32
+  const status = a.status, sc = status === 'working' ? C.cyan : status === 'done' ? C.green : C.dim
+  const boot = Math.min(1, (now - n.born) / 700)
+  const glitching = now - n.glitch < 700
+  const x = n.x + (glitching ? (Math.random() - 0.5) * 8 : 0), y = n.y
+  g.save(); g.globalAlpha = boot
+  // arrival ripples: an update reaching this node
+  const rip = (now - n.ripple) / 900
+  if (rip < 1) { g.strokeStyle = C.cyan; g.globalAlpha = 1 - rip; g.lineWidth = 2; hexPath(x, y, r + rip * 40); g.stroke(); g.globalAlpha = boot }
+  for (const p of pulses) {
+    const k = (now - p.t0) / p.dur
+    if (p.dir > 0 && k > 0.85 && parentKey(p.id) === n.id) { g.strokeStyle = p.color; g.globalAlpha = (1 - k) * 6; g.lineWidth = 3; hexPath(x, y, r + 6 + (k - 0.85) * 160); g.stroke(); g.globalAlpha = boot }
+    if (p.dir < 0 && k > 0.85 && p.id === n.id) { g.strokeStyle = p.color; g.globalAlpha = (1 - k) * 6; g.lineWidth = 3; hexPath(x, y, r + 6 + (k - 0.85) * 160); g.stroke(); g.globalAlpha = boot }
+  }
+  // tool mix ring
+  const mix = {}; let total = 0
+  for (const [t, c] of Object.entries(a.toolMix || {})) { const k = toolKind(t); mix[k] = (mix[k] || 0) + c; total += c }
+  let t0 = -Math.PI / 2
+  g.lineWidth = 4
+  for (const [k, c] of Object.entries(mix)) {
+    const sweep = c / total * Math.PI * 2
+    g.strokeStyle = KIND[k]; g.beginPath(); g.arc(x, y, r + 9, t0 + 0.03, t0 + Math.max(0.04, sweep - 0.03)); g.stroke(); t0 += sweep
+  }
+  // activity ring: spins faster the busier the agent is
+  const recent = a.steps.filter(s => now - s.at < 30000).length
+  g.save(); g.translate(x, y); g.rotate(motionT(now) * (0.3 + recent * 0.25) * (isRoot ? -1 : 1))
+  g.strokeStyle = sc; g.globalAlpha = boot * (status === 'working' ? 0.8 : 0.3); g.lineWidth = 1.5; g.setLineDash([3, 7])
+  g.beginPath(); g.arc(0, 0, r + 17, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); g.restore()
+  // body
+  g.globalAlpha = boot
+  const breathe = status === 'working' ? 10 + Math.sin(now / 520) * 6 : 0
+  g.shadowColor = sc; g.shadowBlur = breathe + (hoverId === n.id ? 18 : 0) + (focusId === n.id ? 10 : 0)
+  g.fillStyle = C.nodeFill; hexPath(x, y, r); g.fill()
+  g.shadowBlur = 0; g.strokeStyle = glitching ? C.red : sc; g.lineWidth = focusId === n.id ? 3 : 1.6; hexPath(x, y, r); g.stroke()
+  if (glitching) { g.strokeStyle = C.cyan; g.globalAlpha = .5; hexPath(x - 4, y + 2, r); g.stroke(); g.globalAlpha = boot }
+  if (focusId === n.id) { g.strokeStyle = C.yellow; g.lineWidth = 2; const b = r + 26, l = 9
+    for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { g.beginPath(); g.moveTo(x + sx * b, y + sy * (b - l)); g.lineTo(x + sx * b, y + sy * b); g.lineTo(x + sx * (b - l), y + sy * b); g.stroke() } }
+  // the glyph
+  g.save(); hexPath(x, y, r - 2); g.clip(); drawGlyph(n, a, x, y, r, now); g.restore()
+  // banner for test results, errors and finishing
+  if (n.fx && now - n.fx.t0 < 2600 && /pass|fail|error|done/.test(n.fx.kind)) {
+    const txt = n.fx.kind === 'pass' ? `Tests passed · ${n.fx.label}` : n.fx.kind === 'fail' ? `Tests failed · ${n.fx.label}` : n.fx.kind === 'done' ? 'Finished' : 'Error'
+    g.font = `700 13px ${F.head}`; const w = g.measureText(txt).width + 18
+    g.fillStyle = n.fx.color; g.fillRect(x - w / 2, y - r - 46, w, 20)
+    g.fillStyle = C.bg; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, x, y - r - 36)
+  }
+  const att = attention(a, now)
+  if (att) {
+    const q = (now % 1400) / 1400; g.strokeStyle = att.color; g.globalAlpha = boot * (1 - q); g.lineWidth = 2; hexPath(x, y, r + 22 + q * 18); g.stroke(); g.globalAlpha = boot
+    drawBadge(x, y - r - (n.fx && now - n.fx.t0 < 2600 && /pass|fail|error|done/.test(n.fx.kind) ? 70 : 46), att, now)
+  }
+  drawCard(n, a, x, y + r + 24, isRoot, sc, now)
+  g.restore()
+}
+
+function parentKey(id) { const root = rootOf(snap.agents); const n = nodes.get(id); return n && root ? parentOf(n.a, root) : null }
+
+function drawGlyph(n, a, x, y, r, now) {
+  const fxLive = n.fx && now - n.fx.t0 < 1800 && /add|cut/.test(n.fx.kind)
+  const kind = fxLive ? n.fx.kind : currentKind(a, now)
+  g.textAlign = 'center'; g.textBaseline = 'middle'
+  const t = (now % 3600000) / 1000   // keep it small: `| 0` on epoch seconds overflows
+  switch (kind) {
+    case 'add': case 'edit': {            // code rain, green
+      g.font = `10px ${F.mono}`
+      for (let i = 0; i < 9; i++) { const cx = x - r + 6 + i * (2 * r - 12) / 8, cy = y - r + ((t * 60 + i * 23) % (2 * r)); g.fillStyle = `rgba(57,255,136,${0.3 + (i % 3) * 0.2})`; g.fillText(HEX[(i * 7 + Math.floor(t * 9)) % 16], cx, cy) }
+      g.font = `700 ${r * 0.8}px ${F.head}`; g.fillStyle = C.green; g.shadowColor = C.green; g.shadowBlur = 12
+      g.fillText(fxLive && n.fx.size ? `+${n.fx.size}` : '+', x, y); break
+    }
+    case 'cut': {                          // shaking red count
+      g.font = `700 ${r * 0.8}px ${F.head}`; g.fillStyle = C.red; g.shadowColor = C.red; g.shadowBlur = 12
+      g.fillText(n.fx && n.fx.size ? `−${n.fx.size}` : '−', x + Math.sin(t * 5) * 1.5, y); break
+    }
+    case 'read': {                         // scan line sweeping down a page
+      for (let i = 0; i < 5; i++) { g.fillStyle = `rgba(${C.tickRGB},.35)`; g.fillRect(x - r * .55, y - r * .5 + i * r * .24, r * (0.5 + ((i * 37) % 5) / 10), 2) }
+      const sy = y - r + ((t * 70) % (2 * r))
+      g.fillStyle = `rgba(${C.accentRGB},.18)`; g.fillRect(x - r, sy - 10, 2 * r, 10)
+      g.fillStyle = C.cyan; g.fillRect(x - r, sy, 2 * r, 1.5)
+      break
+    }
+    case 'search': {                       // radar sweep with blips
+      const sw = t * 3
+      if (g.createConicGradient) { const grd = g.createConicGradient(sw, x, y); grd.addColorStop(0, `rgba(${C.goalRGB},.55)`); grd.addColorStop(0.15, `rgba(${C.goalRGB},0)`); grd.addColorStop(1, `rgba(${C.goalRGB},0)`); g.fillStyle = grd; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill() }
+      g.strokeStyle = `rgba(${C.goalRGB},.4)`; g.beginPath(); g.arc(x, y, r * .5, 0, Math.PI * 2); g.stroke()
+      for (let i = 0; i < 3; i++) { const ba = i * 2.1 + 0.5, br = r * (0.3 + i * 0.2); g.fillStyle = C.yellow; g.globalAlpha = 0.4 + 0.6 * Math.max(0, Math.cos(sw - ba)); g.fillRect(x + Math.cos(ba) * br, y + Math.sin(ba) * br, 3, 3) }
+      g.globalAlpha = 1; break
+    }
+    case 'run': {                          // terminal prompt, blinking, with a spinner
+      g.font = `600 ${r * .62}px ${F.mono}`; g.fillStyle = C.amber; g.shadowColor = C.amber; g.shadowBlur = 10
+      g.globalAlpha = 0.55 + 0.45 * Math.cos(t * 2.4); g.fillText('>_', x, y); g.globalAlpha = 1
+      g.strokeStyle = C.amber; g.lineWidth = 2; g.beginPath(); g.arc(x, y, r * .78, t * 6, t * 6 + 1.2); g.stroke(); break
+    }
+    case 'browse': {                       // spinning globe
+      g.strokeStyle = C.blue; g.lineWidth = 1.4; g.beginPath(); g.arc(x, y, r * .62, 0, Math.PI * 2); g.stroke()
+      for (let i = 0; i < 3; i++) { const sx = Math.abs(Math.cos(t * 1.5 + i * Math.PI / 3)); g.beginPath(); g.ellipse(x, y, Math.max(0.5, r * .62 * sx), r * .62, 0, 0, Math.PI * 2); g.stroke() }
+      g.beginPath(); g.moveTo(x - r * .62, y); g.lineTo(x + r * .62, y); g.stroke(); break
+    }
+    case 'agent': {                        // handing off: hexes unfolding
+      for (let i = 0; i < 3; i++) { const k = ((t * 1.2 + i / 3) % 1); g.strokeStyle = C.purple; g.globalAlpha = 1 - k; hexPath(x, y, Math.max(1, r * k)); g.stroke() }
+      g.globalAlpha = 1; break
+    }
+    case 'error': {                        // static and a jittering cross
+      g.font = `700 ${r * .5}px ${F.head}`; g.fillStyle = C.red
+      for (let i = 0; i < 3; i++) g.fillRect(x - r, y - r + ((t * 0.45 + i / 3) % 1) * 2 * r, 2 * r, 2)
+      g.fillText('✗', x + Math.sin(t * 3) * 1.2, y); break
+    }
+    default: {
+      g.font = `700 ${r * .6}px ${F.head}`
+      if (a.status === 'done') { g.fillStyle = C.green; g.fillText('✓', x, y) }
+      else if (a.status === 'working') { g.fillStyle = C.cyan; g.globalAlpha = 0.55 + 0.45 * Math.sin(t * 2); g.fillText('◆', x, y); g.globalAlpha = 1 }
+      else { g.fillStyle = C.dim; g.fillText('◇', x, y) }
+    }
+  }
+  g.shadowBlur = 0
+}
+
+/** The card under a node: name, status, the newest update typed out, stats, and a strip of its last steps. */
+function drawCard(n, a, x, y, isRoot, sc, now) {
+  const w = isRoot ? 250 : 190
+  g.textAlign = 'center'; g.textBaseline = 'top'
+  g.font = `700 ${isRoot ? 18 : 14}px ${F.head}`
+  g.fillStyle = isRoot ? C.yellow : C.text
+  g.fillText(cut(a.label, isRoot ? 30 : 24), x, y)
+  const kind = currentKind(a, now)
+  g.font = `12px ${F.mono}`; g.fillStyle = sc
+  g.fillText(`${cap(a.status)}${kind === 'error' ? ' · Error' : kind ? ' · ' + KIND_NAME[kind] : ''}`, x, y + 18)
+  const last = a.updates[a.updates.length - 1]
+  if (last) {
+    const typing = now - n.typedAt < 700
+    const shown = typing ? Math.max(1, Math.floor((now - n.typedAt) / 700 * last.text.length)) : last.text.length
+    g.fillStyle = TONE[last.tone] || C.text; g.font = `12px ${F.mono}`
+    g.fillText(cut(last.text.slice(0, shown), isRoot ? 40 : 27) + (typing ? '█' : ''), x, y + 32)
+  }
+  g.fillStyle = C.dim; g.font = `11px ${F.mono}`
+  g.fillText(`${a.calls} actions · ${a.linesChanged} lines · $${a.costUsd.toFixed(2)}${a.errors ? ' · ' + a.errors + ' errors' : ''}`, x, y + 47)
+  // last steps as a strip of cells, newest right; a running one blinks
+  const steps = a.steps.slice(-12), cw = 11, sx = x - steps.length * cw / 2
+  steps.forEach((s, i) => {
+    g.fillStyle = s.isError ? C.red : KIND[s.kind] || C.dim
+    g.globalAlpha = !s.isDone ? 0.55 + 0.45 * Math.sin(now / 420) : 0.35 + i / steps.length * 0.6
+    g.fillRect(sx + i * cw, y + 62, cw - 3, 5)
+  })
+  g.globalAlpha = 1
+  n.card = { x: x - w / 2, y, w, h: 70 }
+}
+
+function drawSparks() {
+  g.font = `11px ${F.mono}`; g.textAlign = 'center'; g.textBaseline = 'middle'
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    const s = sparks[i]; s.x += s.vx; s.y += s.vy; s.vy += 0.03; s.life -= 0.018
+    if (s.life <= 0) { sparks.splice(i, 1); continue }
+    g.globalAlpha = s.life; g.fillStyle = s.color; g.fillText(s.ch, s.x, s.y)
+  }
+  g.globalAlpha = 1
+}
+
+// ---------- power: fewer frames and no glow when the window is in the background or on battery ----------
+let LOW = false, onBattery = false, lastDraw = 0, frameCost = 0, heavy = false
+// a window watched beside your work keeps its full look; battery, the screensaver or a slow machine shed glow
+const refreshPower = () => { LOW = onBattery || !!saverSince || heavy || MINI }
+if (navigator.getBattery) navigator.getBattery().then(b => { const set = () => { onBattery = !b.charging; refreshPower() }; set(); b.addEventListener('chargingchange', set) }).catch(() => {})
+addEventListener('focus', refreshPower); addEventListener('blur', refreshPower)
+const fps = () => (saverSince || (onBattery && !document.hasFocus()) ? 30 : 60)
+const guideEl = document.getElementById('guide')
+// glow is the costliest thing drawn, so low power switches it off where it is set
+{ const d = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'shadowBlur'); Object.defineProperty(g, 'shadowBlur', { get() { return d.get.call(this) }, set(v) { d.set.call(this, LOW ? 0 : v) } }) }
+
+let lastFrame = Date.now()
+function frame(ts) {
+  // paced on the display's own frame clock, so motion steps evenly
+  ts = ts ?? performance.now()
+  if (ts - lastDraw < 1000 / fps() * 0.85 || !guideEl.hidden) { requestAnimationFrame(frame); return }
+  lastDraw = ts
+  const t0 = performance.now(), now = Math.round(performance.timeOrigin + ts), k = 1 - Math.pow(0.92, Math.min(60, (now - lastFrame) / 16.7))
+  lastFrame = now
+  for (const n of nodes.values()) if (n.tx !== undefined) { n.x = lerp(n.x, n.tx, k); n.y = lerp(n.y, n.ty, k) }
+  for (let i = pulses.length - 1; i >= 0; i--) if (now - pulses[i].t0 > pulses[i].dur) pulses.splice(i, 1)
+  g.setTransform(DPR, 0, 0, DPR, 0, 0)
+  drawBackdrop(now)
+  const saver = document.body.classList.contains('saver')
+  if (saver) g.filter = 'opacity(42%)'
+  const root = rootOf(snap.agents)
+  if (MINI) drawMini(now)
+  else if (layout.mission) drawCore(now)
+  else {
+    if (root) for (const n of nodes.values()) { const p = parentOf(n.a, root); if (p && nodes.get(p)) { drawString(n, nodes.get(p), now); g.setTransform(DPR, 0, 0, DPR, 0, 0) } }
+    const order = [...nodes.values()].sort((a, b) => (b.ring || 0) - (a.ring || 0))
+    for (const n of order) drawNode(n, now)
+  }
+  if (!MINI) drawSparks()
+  g.filter = 'none'
+  if (!MINI) drawFireworks(now)
+  placeBrief()
+  const empty = nodes.size ? 'none' : 'grid', el = document.getElementById('empty'); if (el.style.display !== empty) el.style.display = empty
+  // average draw cost; above ~9 ms the glow goes, below ~5 ms it comes back
+  frameCost = frameCost * 0.95 + (performance.now() - t0) * 0.05
+  if (heavy !== (heavy ? frameCost > 5 : frameCost > 9)) { heavy = !heavy; refreshPower() }
+  requestAnimationFrame(frame)
+}
+
+// ---------- HUD, panel, log ----------
+function renderHud() {
+  const list = snap.agents || []
+  const sum = k => list.reduce((s, a) => s + (a[k] || 0), 0)
+  const live = list.filter(a => a.status === 'working').length, done = list.filter(a => a.status === 'done').length
+  const now = Date.now(), att = list.map(a => attention(a, now)).filter(Boolean)
+  renderRail(); renderMini()
+  const k = [['Agents', list.length, ''], ['Working', live, ''], ['Done', done, 'ok'], ['Actions', sum('calls'), ''], ['Lines', sum('linesChanged'), 'ok'], ['Est. cost', '$' + sum('costUsd').toFixed(2), 'cost'], ['Errors', sum('errors'), sum('errors') ? 'err' : ''], ...(att.length ? [['Need attention', att.length, 'att']] : [])]
+  // the tab title and saver line follow live data even while replaying
+  const ll = (replaying && latest ? latest : snap).agents || [], la = ll.map(a => attention(a, now)).filter(Boolean), waits = la.filter(x => x.kind === 'wait').length
+  document.title = (waits ? `(${waits} waiting) ` : la.length ? `(${la.length}!) ` : '') + 'Agent Web'
+  const sl = document.getElementById('saverLine')
+  if (sl) sl.textContent = ll.length ? `${ll.filter(a => a.status === 'working').length} working · ${ll.filter(a => a.status === 'done').length} done${waits ? ` · ${waits} waiting for you` : ''}${la.length - waits ? ` · ${la.length - waits} need a look` : ''} · press any key` : 'Waiting for agents · press any key'
+  document.getElementById('kpis').innerHTML = k.map(([l, v, c]) => `<div class="kpi ${c}"${c === 'att' ? ' role="button" tabindex="0" title="Jump to the agent that needs you (N)"' : ''}><b>${esc(v)}</b><span>${l}</span></div>`).join('')
+}
+function renderLegend() {
+  document.getElementById('legend').innerHTML = Object.entries(KIND_NAME).filter(([k]) => k !== 'other').map(([k, nm]) => `<div><i style="background:${KIND[k]}"></i>${nm}</div>`).join('') +
+    '<div class="lk">Hexagon: an agent. Outer arc: tools it used. Ring spin: recent activity.<br>Cells under it: last 12 actions, red = failed.<br>◆ needs you · ▲ stuck · ◌ quiet</div><div class="lk"><button class="lkb" id="keyGuide">Full guide (G)</button></div>'
+}
+renderLegend()
+
+function renderPanel() {
+  const el = document.getElementById('panel'), n = nodes.get(layout.mission || focusId)
+  if (!n) { el.innerHTML = '<div class="label">No agent selected</div>'; return }
+  const a = n.a, sc = a.status === 'working' ? C.cyan : a.status === 'done' ? C.green : C.dim
+  const mix = {}
+  for (const [t, c] of Object.entries(a.toolMix || {})) { const k = toolKind(t); mix[k] = (mix[k] || 0) + c }
+  const scr = a.screen
+  const lines = scr ? scr.lines.map((l, i) => `<div class="ln ${l.mark === '+' ? 'add' : l.mark === '-' ? 'cut' : ''} ${i === scr.focus ? 'focus' : ''}"><em>${l.no || ''}</em>${esc(l.text)}</div>`).join('') : '<div class="ln" style="color:var(--dim)">Nothing to show yet</div>'
+  const plan = a.plan || [], done = plan.filter(s => s.status === 'completed').length
+  const now = Date.now(), buckets = Array(15).fill(0)
+  for (const s of a.steps) { const i = Math.floor((now - s.at) / 4000); if (i >= 0 && i < 15) buckets[14 - i]++ }
+  const peak = Math.max(1, ...buckets)
+  const top = el.scrollTop
+  el.innerHTML = `
+    <button class="x" id="panelX" title="Hide details (Tab)" aria-label="Hide details">×</button>
+    <div><h2>${esc(a.label)}</h2>
+      <span class="chip" style="color:${sc}">${esc(a.status)}</span><span class="chip" style="color:var(--dim)">up ${ago(a.startedAt)}</span>${a.model ? `<span class="chip" style="color:var(--dim)">${esc(a.model.replace(/^claude-/, ''))}</span>` : ''}${a.siteUrl ? `<span class="chip" style="color:var(--blue)">${esc(a.siteUrl.replace(/^https?:\/\//, ''))}</span>` : ''}
+      ${a.goal ? `<div class="goal">${esc(a.goal)}</div>` : ''}
+      ${(() => { const t = attention(a, Date.now()); return t ? `<div class="att ${t.kind === 'wait' ? 'wait' : ''}">${ATT_ICON[t.kind] || ''} ${t.kind === 'wait' ? 'Needs you' : 'Heads up'}: ${esc(t.text)}</div>` : '' })()}</div>
+    ${a.task && a.task !== a.goal ? `<div><div class="label">Task</div><p class="task">${esc(a.task)}</p></div>` : ''}
+    ${plan.length ? `<div><div class="label">Plan · ${done} of ${plan.length} done</div><div class="plan">${plan.map(s => `<div class="p-${s.status}">${s.status === 'completed' ? '✓' : s.status === 'in_progress' ? '▶' : '○'} ${esc(s.text)}</div>`).join('')}</div></div>` : ''}
+    <div class="stats"><div><b>${a.calls}</b><span>Actions</span></div><div><b>${a.linesChanged}</b><span>Lines</span></div><div><b>$${a.costUsd.toFixed(2)}</b><span>Est. cost</span></div><div><b style="color:${a.errors ? C.red : C.text}">${a.errors}</b><span>Errors</span></div></div>
+    <div><div class="label">Activity · last minute</div><div class="bars">${buckets.map((b, i) => `<i class="${i > 12 ? 'hot' : ''}" style="height:${4 + b / peak * 38}px"></i>`).join('')}</div></div>
+    <div><div class="label">Tools used</div><div class="mix">${Object.entries(mix).map(([k, c]) => `<i style="flex:${c};background:${KIND[k]}" title="${KIND_NAME[k]} ${c}"></i>`).join('')}</div></div>
+    <div><div class="label">Live view</div><div class="screen"><div class="t">${scr ? esc(cap(scr.kind) + ' · ' + scr.title) : '—'}</div>${lines}</div></div>
+    <div class="label">History</div>
+    <div class="log">${a.updates.slice().reverse().map(u => `<div class="t-${u.tone}"><time>${ago(u.at)}</time>${esc(u.text)}</div>`).join('')}</div>`
+  el.scrollTop = top
+  el.querySelector('#panelX').onclick = togglePanel
+}
+
+function renderLog(fresh) {
+  document.getElementById('logBody').innerHTML =
+    logRows.slice(0, logOpen ? 40 : 3).map((r, i) => `<div class="row t-${r.tone}${fresh && !i ? ' new' : ''}"><time style="color:var(--dim)">${clock(r.at)}</time> <b>${esc(cut(r.who, 18))}</b> ▸ ${esc(r.text)}</div>`).join('')
+}
+
+
+// ---------- core view: one agent running, drawn large as a neural network ----------
+const VIEWS = ['auto', 'web', 'core']
+const cap = s => (s ? s[0].toUpperCase() + s.slice(1) : '')
+let viewMode = (() => { try { const v = localStorage.getItem('agentWebView'); return v === 'mission' ? 'core' : VIEWS.includes(v) ? v : 'auto' } catch { return 'auto' } })()
+function cycleView() {
+  viewMode = VIEWS[(VIEWS.indexOf(viewMode) + 1) % VIEWS.length]
+  try { localStorage.setItem('agentWebView', viewMode) } catch {}
+  document.getElementById('viewBtn').textContent = 'View: ' + cap(viewMode)
+  layout()
+}
+/** The agent the core view follows: the only one running, or the only one there is. */
+function coreAgent(list) {
+  if (viewMode === 'web' || !list.length) return null
+  const working = list.filter(a => a.status === 'working')
+  if (viewMode === 'core') return working[0] || rootOf(list)
+  return working.length === 1 ? working[0] : list.length === 1 ? list[0] : null
+}
+const VERB = { edit: 'Editing', read: 'Reading', search: 'Searching', run: 'Running', browse: 'Browsing', agent: 'Delegating', other: 'Working', error: 'Error' }
+const coreFires = [], coreFloats = []
+
+/** A network made once per agent (seeded, so it keeps its shape): neurons on a unit disc, each linked to its nearest neighbours. */
+function makeNet(seed) {
+  let s = seed
+  const rnd = () => { s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296 }
+  const ns = []
+  for (let i = 0; i < 110; i++) { const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * 1.04; ns.push({ x: Math.cos(a) * d, y: Math.sin(a) * d, s: 1 + rnd() * 1.8, fl: 0 }) }
+  ns.push({ x: 0, y: 0, s: 3.2, fl: 0 })
+  const links = [], adj = ns.map(() => []), seen = new Set()
+  ns.forEach((p, i) => ns.map((q, j) => ({ j, d: Math.hypot(p.x - q.x, p.y - q.y) })).filter(o => o.j !== i && o.d < 0.36).sort((a, b) => a.d - b.d).slice(0, 3).forEach(o => {
+    const k = Math.min(i, o.j) + '-' + Math.max(i, o.j)
+    if (!seen.has(k)) { seen.add(k); links.push({ a: i, b: o.j }); adj[i].push(links.length - 1); adj[o.j].push(links.length - 1) }
+  }))
+  const ticks = Array.from({ length: 240 }, () => { const n = rnd(); return { len: n < 0.5 ? 0.02 + rnd() * 0.05 : n < 0.88 ? 0.07 + rnd() * 0.13 : 0.21 + rnd() * 0.15, o: 0.18 + rnd() * 0.5, w: 0.6 + rnd() * 1.1, out: n > 0.95 } })
+  const arcs = Array.from({ length: 7 }, () => ({ r: 1.36 + rnd() * 0.09, a0: rnd() * Math.PI * 2, span: 0.25 + rnd() * 0.7, o: 0.3 + rnd() * 0.4, w: 1 + rnd() * 2 }))
+  return { ns, links, adj, ticks, arcs, core: ns.length - 1, rnd }
+}
+const seedOf = id => { let h = 7; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) | 0; return h }
+
+/** Sizes the core to the window: the sphere, a tilted orbit round it carrying the plan steps, and the goal at the orbit's end. */
+function coreLayout(a) {
+  const AW = W - (panelOpen() ? 404 : 0)
+  const filed = !!(a.plan && a.plan.length)
+  const short = s => (s.kind === 'edit' || s.kind === 'read' ? String(s.target || '').split('/').pop() : cut(s.target || s.tool, 40)) || s.tool
+  const lastStep = a.steps[a.steps.length - 1]
+  const plan = filed ? a.plan : [...a.steps.slice(-6).map(s => ({ text: `${KIND_NAME[s.kind] || 'Tool'} · ${short(s)}`, status: s.isError ? 'failed' : s.isDone ? 'completed' : 'in_progress' })), ...(lastStep && lastStep.isDone ? [{ text: 'Next action', status: 'pending' }] : [])]
+  const k = plan.length
+  const top = 190, avail = H - top - 30
+  const R = Math.max(110, Math.min(300, (AW / 2 - 60) / 2.15, avail / 3))
+  const cx = AW / 2, cy = top + avail / 2
+  const rot = -12 * Math.PI / 180, RX = R * 2.15, RY = R * 1.02, D = Math.PI / 180
+  const orbit = t => { const x = RX * Math.cos(t), y = RY * Math.sin(t); return { x: cx + x * Math.cos(rot) - y * Math.sin(rot), y: cy + x * Math.sin(rot) + y * Math.cos(rot) } }
+  const steps = plan.map((s, i) => { const deg = k === 1 ? 90 : 168 - i * 194 / (k - 1); return { s, deg, ...orbit(deg * D) } })
+  let cur = plan.findIndex(s => s.status === 'in_progress')
+  if (cur < 0) cur = k && plan.every(s => s.status === 'completed') ? k : plan.findIndex(s => s.status === 'pending')
+  const n = nodes.get(a.id); n.tx = cx; n.ty = cy; n.ring = 0
+  if (!n.net) n.net = makeNet(seedOf(a.id))
+  layout.core = { cx, cy, R, AW, steps, cur, orbit, D, goalDeg: -66, goal: orbit(-66 * D), plan, filed }
+}
+
+/** Fires a chain of neurons from the centre out toward the step being worked on; an error stops short. */
+function fireChain(n, kind, now, size) {
+  const L = layout.core, net = n.net; if (!L || !net) return
+  const live = L.steps[L.cur]
+  const ang = live ? Math.atan2(live.y - L.cy, live.x - L.cx) : net.rnd() * Math.PI * 2, tx = Math.cos(ang) * 1.1, ty = Math.sin(ang) * 1.1
+  const d = i => Math.hypot(net.ns[i].x - tx, net.ns[i].y - ty)
+  const chain = [net.core], linkIds = []
+  for (let h = 0, at = net.core; h < 14; h++) {
+    const opts = net.adj[at].map(li => { const l = net.links[li]; return { li, j: l.a === at ? l.b : l.a } }).filter(o => !chain.includes(o.j) && d(o.j) < d(at)).sort((p, q) => d(p.j) - d(q.j))
+    if (!opts.length) break
+    const o = opts[opts.length > 1 && net.rnd() < 0.35 ? 1 : 0]
+    chain.push(o.j); linkIds.push(o.li); at = o.j
+  }
+  if (kind === 'error') { chain.length = Math.max(2, Math.ceil(chain.length * 0.55)); linkIds.length = chain.length - 1 }
+  const f = { chain, linkIds, col: kind === 'error' ? C.red : KIND[kind] || C.cyan, kind, t0: now, n }
+  coreFires.push(f); if (coreFires.length > 14) coreFires.shift()
+  if (size && (kind === 'edit')) { const p = net.ns[chain[chain.length - 1]]; coreFloats.push({ ux: p.x, uy: p.y, t0: now + chain.length * 55, text: size, col: size[0] === '−' ? C.red : C.green }) }
+  return f
+}
+
+function drawCore(now) {
+  const L = layout.core, n = nodes.get(layout.mission); if (!L || !n || !n.net) return
+  const a = n.a, net = n.net, { cx, cy, R, steps, cur, goal } = L
+  const plan = L.plan, done = plan.filter(s => s.status === 'completed').length, complete = L.filed && done === plan.length
+  const kind = currentKind(a, now), last = a.steps[a.steps.length - 1], running = last && !last.isDone
+  const recent = a.steps.filter(s => now - s.at < 30000).length
+  const P = (u, v) => [cx + u * R, cy + v * R]
+  const mt = motionT(now) * 1000   // decorative turning and breathing; frozen under reduced motion
+
+  // queued events: a new action fires a chain; a running one keeps re-firing; a cleared step bursts
+  for (const ev of n.fireQ || []) fireChain(n, ev.kind, now, ev.size)
+  n.fireQ = []
+  const mine = coreFires.filter(f => f.n === n)
+  const newest = mine[mine.length - 1]
+  if (running && newest && now - newest.t0 > 1000) fireChain(n, last.kind, now)
+  if (n.burst) {
+    const p = n.clearIdx >= steps.length ? goal : steps[n.clearIdx]
+    if (p) for (let i = 0; i < 30; i++) { const t = Math.random() * Math.PI * 2, sp = 0.6 + Math.random() * 2.6; sparks.push({ x: p.x, y: p.y, vx: Math.cos(t) * sp, vy: Math.sin(t) * sp, life: 1, color: C.green, ch: i % 3 ? '✓' : '+' }) }
+    if (n.clearIdx >= steps.length) n.flareAt = now
+    n.burst = false
+  }
+
+  // light per neuron and link: chains in flight, background flicker, a goal flare
+  const nl = new Float32Array(net.ns.length), nc = new Array(net.ns.length), ll = new Float32Array(net.links.length), lc = new Array(net.links.length)
+  for (const f of mine) {
+    const e = now - f.t0
+    f.chain.forEach((idx, i) => { const b = e >= i * 55 ? Math.max(0, 1 - (e - i * 55) / 1100) : 0; if (b > nl[idx]) { nl[idx] = b; nc[idx] = f.col } })
+    f.linkIds.forEach((li, i) => { const b = e >= i * 55 ? Math.max(0, 1 - (e - i * 55) / 1000) : 0; if (b > ll[li]) { ll[li] = b; lc[li] = f.col } })
+  }
+  if (Math.random() < 0.05 + Math.min(0.25, recent * 0.02)) net.ns[Math.random() * net.ns.length | 0].fl = now
+  const flare = n.flareAt ? Math.max(0, 1 - (now - n.flareAt) / 2200) : 0
+  net.ns.forEach((p, i) => { const b = Math.max(p.fl ? 0.5 * Math.max(0, 1 - (now - p.fl) / 800) : 0, flare); if (b > nl[i]) { nl[i] = b; nc[i] = flare > 0 ? C.yellow : C.ink2 } })
+
+  const jitter = now - (n.errAt || 0) < 600
+  // what a style's hooks are handed: where the core is, what is happening, how lit it is
+  const hook = theme || {}, tipN = newest ? net.ns[newest.chain[newest.chain.length - 1]] : null
+  const cc = { cx, cy, R, now, t: motionT(now), kind, fire: kind === 'error' ? C.red : KIND[kind] || C.cyan, steps, cur, goal, complete, flare, recent, low: LOW, jitter,
+    tip: tipN ? { x: cx + tipN.x * R, y: cy + tipN.y * R } : null, net, P }
+  if (hook.coreUnder) { g.save(); hook.coreUnder(g, cc); g.restore() }
+  g.save()
+  if (jitter) g.translate((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 4)
+  const path = (d0, d1) => { const m = Math.max(2, Math.ceil(Math.abs(d1 - d0) / 3)); g.beginPath(); for (let i = 0; i <= m; i++) { const p = L.orbit((d0 + (d1 - d0) * i / m) * L.D); g[i ? 'lineTo' : 'moveTo'](p.x, p.y) } }
+  g.strokeStyle = 'rgba(74,91,120,.6)'; g.lineWidth = 1.2; g.setLineDash([3, 7]); path(180, 360); g.stroke(); g.setLineDash([])
+  // the sphere: a breathing glow, its outline and a slowly turning globe frame (a style may draw its own)
+  if (hook.sphere) { g.save(); hook.sphere(g, cc); g.restore() } else {
+  const glow = g.createRadialGradient(cx, cy - R * 0.08, 0, cx, cy, R * 1.12)
+  const br = 0.85 + 0.15 * Math.sin(mt / 520) + flare * 0.6
+  glow.addColorStop(0, `rgba(${C.glow0},${0.42 * br})`); glow.addColorStop(0.35, `rgba(${C.glow1},${0.22 * br})`); glow.addColorStop(0.75, `rgba(${C.glow2},${0.14 * br})`); glow.addColorStop(1, 'rgba(0,0,0,0)')
+  g.fillStyle = glow; g.beginPath(); g.arc(cx, cy, R * 1.12, 0, Math.PI * 2); g.fill()
+  g.strokeStyle = jitter ? C.red : C.shell; g.lineWidth = 1.2; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke()
+  g.strokeStyle = C.wire; g.lineWidth = 1
+  for (let i = 0; i < 4; i++) { g.beginPath(); g.ellipse(cx, cy, Math.max(0.5, R * Math.abs(Math.cos(mt / 9000 + i * Math.PI / 4))), R, 0, 0, Math.PI * 2); g.stroke() }
+  for (const v of [-0.7, -0.38, 0, 0.38, 0.7]) { const rx = R * Math.cos(Math.asin(v)); g.beginPath(); g.ellipse(cx, cy + v * R, rx, rx * 0.2, 0, 0, Math.PI * 2); g.stroke() }
+  // outer rings of radial ticks: they turn faster the busier the agent is
+  g.save(); g.translate(cx, cy); g.rotate(mt / 1000 * (0.03 + Math.min(0.3, recent * 0.02)))
+  net.ticks.forEach((t, i) => {
+    const ang = i / net.ticks.length * Math.PI * 2, r0 = R * (t.out ? 1.27 : 1.17), r1 = r0 + t.len * R
+    g.strokeStyle = `rgba(${C.tickRGB},${t.o})`; g.lineWidth = t.w; g.beginPath(); g.moveTo(Math.cos(ang) * r0, Math.sin(ang) * r0); g.lineTo(Math.cos(ang) * r1, Math.sin(ang) * r1); g.stroke()
+    if (i % 11 === 0) { g.beginPath(); g.arc(Math.cos(ang) * (r1 + 4), Math.sin(ang) * (r1 + 4), 2, 0, Math.PI * 2); g.strokeStyle = `rgba(${C.tickRGB},.6)`; g.lineWidth = 1; g.stroke() }
+  })
+  g.restore()
+  g.save(); g.translate(cx, cy); g.rotate(-mt / 1000 * 0.05)
+  g.setLineDash([2, 9]); g.strokeStyle = `rgba(${C.accentRGB},.2)`; g.lineWidth = 1; g.beginPath(); g.arc(0, 0, R * 1.49, 0, Math.PI * 2); g.stroke(); g.setLineDash([])
+  for (const arc of net.arcs) { g.strokeStyle = `rgba(${C.accentRGB},${arc.o})`; g.lineWidth = arc.w; g.beginPath(); g.arc(0, 0, R * arc.r, arc.a0, arc.a0 + arc.span); g.stroke() }
+  g.restore()
+  }
+
+  // the network: links, then neurons; lit ones glow in the action's colour
+  net.links.forEach((l, i) => {
+    const [x1, y1] = P(net.ns[l.a].x, net.ns[l.a].y), [x2, y2] = P(net.ns[l.b].x, net.ns[l.b].y), b = ll[i]
+    if (hook.link) { g.save(); hook.link(g, x1, y1, x2, y2, b > 0.02 ? lc[i] : null, b, i, cc); g.restore(); return }
+    g.strokeStyle = b > 0.02 ? lc[i] : C.link; g.globalAlpha = b > 0.02 ? 0.35 + 0.65 * b : 1; g.lineWidth = 0.7 + b * 2
+    if (b > 0.5) { g.shadowColor = lc[i]; g.shadowBlur = 12 }
+    g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); g.shadowBlur = 0
+  })
+  g.globalAlpha = 1
+  net.ns.forEach((p, i) => {
+    const [x, y] = P(p.x, p.y), b = nl[i], r = p.s * R / 300 + b * 2.4
+    if (hook.neuron) { g.save(); hook.neuron(g, x, y, Math.max(0.8, r), b > 0.05 ? nc[i] : null, b, i, cc); g.restore(); return }
+    g.fillStyle = b > 0.05 ? nc[i] : C.neuron
+    if (b > 0.4) { g.shadowColor = nc[i]; g.shadowBlur = 14 }
+    g.beginPath(); g.arc(x, y, Math.max(0.8, r), 0, Math.PI * 2); g.fill(); g.shadowBlur = 0
+  })
+  // packets: the head of each chain in flight
+  for (const f of mine) {
+    const hi = (now - f.t0) / 55
+    if (hi >= f.chain.length - 1) continue
+    const i = Math.floor(hi), k = hi - i, A = net.ns[f.chain[i]], B = net.ns[f.chain[i + 1]]
+    const [x, y] = P(A.x + (B.x - A.x) * k, A.y + (B.y - A.y) * k)
+    g.fillStyle = C.packet; g.shadowColor = f.col; g.shadowBlur = 18; g.beginPath(); g.arc(x, y, 3, 0, Math.PI * 2); g.fill(); g.shadowBlur = 0
+  }
+
+  // what kind of action is happening, as an effect on the sphere
+  g.save(); g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.clip()
+  const t = motionT(now)
+  if (kind === 'read') { const sy = cy - R + ((t * 90) % (2 * R)); g.fillStyle = `rgba(${C.accentRGB},.12)`; g.fillRect(cx - R, sy - 18, 2 * R, 18); g.fillStyle = C.cyan; g.shadowColor = C.cyan; g.shadowBlur = 10; g.fillRect(cx - R, sy, 2 * R, 2); g.shadowBlur = 0 }
+  if (kind === 'search' && g.createConicGradient) { const grd = g.createConicGradient(t * 2.2, cx, cy); grd.addColorStop(0, `rgba(${C.goalRGB},.28)`); grd.addColorStop(0.12, `rgba(${C.goalRGB},0)`); grd.addColorStop(1, `rgba(${C.goalRGB},0)`); g.fillStyle = grd; g.fillRect(cx - R, cy - R, 2 * R, 2 * R) }
+  if (kind === 'browse') { g.strokeStyle = 'rgba(61,139,255,.55)'; g.lineWidth = 1.3; for (let i = 0; i < 5; i++) { g.beginPath(); g.ellipse(cx, cy, Math.max(0.5, R * Math.abs(Math.cos(t * 0.9 + i * Math.PI / 5))), R, 0, 0, Math.PI * 2); g.stroke() } }
+  g.restore()
+  if (kind === 'run') for (let i = 0; i < 3; i++) { const k = ((t * 0.8 + i / 3) % 1); g.strokeStyle = C.amber; g.globalAlpha = (1 - k) * 0.7; g.lineWidth = 4 * (1 - k) + 1; g.beginPath(); g.arc(cx, cy, R * (0.15 + k * 1.05), 0, Math.PI * 2); g.stroke() }
+  if (kind === 'browse') for (let i = 0; i < 3; i++) { const ang = 0.6 + i * 2.1 + t * 0.1, [x1, y1] = P(Math.cos(ang) * 0.95, Math.sin(ang) * 0.95), [x2, y2] = P(Math.cos(ang) * 1.4, Math.sin(ang) * 1.4); g.strokeStyle = C.blue; g.globalAlpha = 0.8; g.lineWidth = 1.6; g.setLineDash([4, 8]); g.lineDashOffset = -now / 30; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); g.setLineDash([]); g.lineDashOffset = 0; g.fillStyle = C.blue; g.beginPath(); g.arc(x2, y2, 4, 0, Math.PI * 2); g.fill() }
+  if (kind === 'agent') { const [bx, by] = P(1.3, -0.75), [ex, ey] = P(0.82, -0.5), k = 0.5 + 0.5 * Math.sin(t * 2); g.strokeStyle = C.purple; g.globalAlpha = 0.9; g.lineWidth = 2; g.setLineDash([4, 8]); g.lineDashOffset = -now / 30; g.beginPath(); g.moveTo(ex, ey); g.lineTo(bx, by); g.stroke(); g.setLineDash([]); g.lineDashOffset = 0; g.fillStyle = `rgba(179,107,255,${0.15 + 0.2 * k})`; g.beginPath(); g.arc(bx, by, 16, 0, Math.PI * 2); g.fill(); g.stroke() }
+  if (kind === 'error') { g.strokeStyle = C.red; g.globalAlpha = 0.8; g.lineWidth = 2; g.setLineDash([14, 6, 3, 9]); g.beginPath(); g.arc(cx, cy, R * 1.02, 0, Math.PI * 2); g.stroke(); g.setLineDash([]) }
+  g.globalAlpha = 1
+  g.restore()
+
+  if (hook.coreOver) { g.save(); hook.coreOver(g, cc); g.restore() }
+  // the agent at the centre
+  if (hook.coreCenter) { g.save(); hook.coreCenter(g, cc); g.restore() }
+  else { hexPath(cx, cy, 24); g.fillStyle = C.chip; g.fill(); g.strokeStyle = C.yellow; g.lineWidth = 1.6; g.shadowColor = C.yellow; g.shadowBlur = 10; g.stroke(); g.shadowBlur = 0 }
+
+  // the orbit's near half, lit green up to the step in progress and live from there to it
+  const liveCol = kind === 'error' ? C.red : KIND[kind] || C.cyan
+  g.strokeStyle = 'rgba(111,233,255,.4)'; g.lineWidth = 1.3; path(0, 180); g.stroke()
+  const k = steps.length, upTo = Math.min(cur < 0 ? 0 : cur, k)
+  if (upTo > 0) { g.strokeStyle = C.green; g.lineWidth = 3; g.shadowColor = C.green; g.shadowBlur = 10; path(200, complete ? L.goalDeg : steps[upTo - 1].deg); g.stroke(); g.shadowBlur = 0 }
+  if (cur >= 0 && cur < k) { g.strokeStyle = liveCol; g.lineWidth = 3; g.setLineDash([6, 11]); g.lineDashOffset = -now / 40; g.shadowColor = liveCol; g.shadowBlur = 10; path(cur ? steps[cur - 1].deg : 200, steps[cur].deg); g.stroke(); g.setLineDash([]); g.lineDashOffset = 0; g.shadowBlur = 0 }
+  // a beam from the firing neurons to the step being worked on
+  const tip = newest ? net.ns[newest.chain[newest.chain.length - 1]] : null
+  if (tip && cur >= 0 && cur < k) { const [ex, ey] = P(tip.x, tip.y); g.strokeStyle = liveCol; g.globalAlpha = 0.8; g.lineWidth = 1.6; g.setLineDash([5, 11]); g.lineDashOffset = -now / 40; g.beginPath(); g.moveTo(ex, ey); g.lineTo(steps[cur].x, steps[cur].y); g.stroke(); g.setLineDash([]); g.lineDashOffset = 0; g.globalAlpha = 1 }
+  // the steps on the orbit, labels on the outside
+  steps.forEach((p, i) => {
+    const st = p.s.status === 'completed' ? 'done' : p.s.status === 'failed' ? 'failed' : i === cur ? 'live' : 'todo'
+    const col = st === 'done' ? C.green : st === 'failed' ? C.red : st === 'live' ? liveCol : C.todo
+    if (st === 'live') { const q = (now % 1600) / 1600; g.strokeStyle = col; g.globalAlpha = 1 - q; g.lineWidth = 1.5; g.beginPath(); g.arc(p.x, p.y, 10 + q * 26, 0, Math.PI * 2); g.stroke(); g.globalAlpha = 1 }
+    if (st === 'done') { hexPath(p.x, p.y, 13); g.strokeStyle = C.green; g.globalAlpha = 0.6; g.lineWidth = 1.2; g.stroke(); g.globalAlpha = 1 }
+    g.beginPath(); g.arc(p.x, p.y, st === 'live' ? 10 : 7, 0, Math.PI * 2)
+    if (st === 'todo') { g.fillStyle = C.bg; g.fill(); g.strokeStyle = col; g.lineWidth = 1.6; g.stroke() } else { g.fillStyle = col; g.shadowColor = col; g.shadowBlur = 12; g.fill(); g.shadowBlur = 0 }
+    const right = p.x >= cx, lw = k > 8 ? 150 : 190, lines = k > 8 ? 2 : 3
+    let lx = right ? p.x + 22 : p.x - 22 - lw
+    lx = Math.max(16, Math.min(L.AW - 16 - lw, lx))
+    const ly = p.y + (p.y > cy ? 10 : -56)
+    g.textBaseline = 'top'; g.textAlign = 'left'
+    g.font = `12.5px ${F.mono}`
+    if (st === 'live') { g.fillStyle = C.labelBg; g.fillRect(lx - 8, ly - 6, lw + 16, 20 + lines * 15); g.strokeStyle = col; g.lineWidth = 1; g.strokeRect(lx - 8, ly - 6, lw + 16, 20 + lines * 15) }
+    else { g.fillStyle = C.chip; g.fillRect(lx - 8, ly - 6, lw + 16, 20 + lines * 15) }
+    const tx = right ? lx : lx + lw
+    g.textAlign = right ? 'left' : 'right'
+    g.font = `10px ${F.mono}`; g.fillStyle = st === 'todo' ? C.muted : col   // C.todo is below AA at 10px
+    g.fillText(`${String(i + 1).padStart(2, '0')} · ${st === 'done' ? 'Done' : st === 'failed' ? 'Failed' : st === 'live' ? 'Now' : 'Next'}`, tx, ly)
+    g.font = `12.5px ${F.mono}`; g.fillStyle = st === 'live' ? C.ink2 : st === 'done' ? C.doneInk : C.muted
+    wrapText(p.s.text, tx, ly + 15, lw, 15, lines)
+  })
+  if (k) {
+    const gc = complete ? C.green : C.yellow
+    g.save(); g.translate(goal.x, goal.y); g.strokeStyle = gc; g.lineWidth = 2; g.shadowColor = gc; g.shadowBlur = complete ? 20 + Math.sin(now / 450) * 8 : 8
+    g.save(); g.rotate(-mt / 2400); g.setLineDash([30, 10.8]); g.beginPath(); g.arc(0, 0, 26, 0, Math.PI * 2); g.stroke(); g.restore()
+    g.save(); g.rotate(mt / 4000); g.globalAlpha = 0.5; g.lineWidth = 1; g.setLineDash([2, 6]); g.beginPath(); g.arc(0, 0, 38, 0, Math.PI * 2); g.stroke(); g.restore()
+    g.shadowBlur = 12; g.fillStyle = gc; g.globalAlpha = complete ? 1 : 0.6 + 0.3 * Math.sin(now / 650); g.beginPath(); g.arc(0, 0, 6, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1; g.shadowBlur = 0; g.restore()
+    g.textAlign = 'center'; g.textBaseline = 'bottom'; g.font = `600 15px ${F.head}`; g.fillStyle = gc
+    g.fillText(complete ? 'Goal reached' : 'Goal', goal.x, goal.y - 46)
+  }
+
+  // the goal, top left, with progress
+  g.textAlign = 'left'; g.textBaseline = 'top'
+  g.font = `11px ${F.mono}`; g.fillStyle = C.muted; g.fillText(`GOAL · ${a.label.toUpperCase()}`, 40, 96)
+  g.font = `700 30px ${F.head}`; g.fillStyle = complete ? C.green : C.yellow
+  const gl = wrapText(a.goal || 'No goal yet. It shows the next prompt you send.', 40, 112, Math.min(L.AW - 80, 960), 32, 2)
+  const by = 112 + gl * 32 + 8
+  if (plan.length) {
+    const cw = Math.min(560, L.AW - 80) / plan.length
+    plan.forEach((s, i) => { g.fillStyle = s.status === 'completed' ? C.green : s.status === 'failed' ? C.red : i === cur ? (KIND[kind] || C.cyan) : '#16202e'; g.globalAlpha = i === cur ? 0.6 + 0.4 * Math.sin(now / 450) : 1; g.fillRect(40 + i * cw, by, cw - 3, 5) })
+    g.globalAlpha = 1; g.font = `12px ${F.mono}`; g.fillStyle = C.text
+    g.fillText(!L.filed ? `No plan written · showing its last ${plan.length - (plan[plan.length - 1].status === 'pending' ? 1 : 0)} actions` : complete ? `All ${plan.length} steps done` : `Step ${Math.min(cur + 1, plan.length)} of ${plan.length} · ${done} done`, 40, by + 12)
+  } else { g.font = `12px ${F.mono}`; g.fillStyle = C.muted; g.fillText('Waiting for its first action.', 40, by) }
+
+  const att = attention(a, now)
+  if (att) {
+    const q = (now % 1600) / 1600; g.strokeStyle = att.color; g.globalAlpha = 1 - q; g.lineWidth = 2.5; g.beginPath(); g.arc(cx, cy, R * (1.03 + q * 0.12), 0, Math.PI * 2); g.stroke(); g.globalAlpha = 1
+    drawBadge(cx, cy - R * 0.72 - 40, att, now, true)
+  }
+  // name and state, inside the sphere's lower edge
+  const sc = a.status === 'working' ? C.cyan : a.status === 'done' ? C.green : C.muted
+  g.textAlign = 'center'; g.textBaseline = 'top'
+  const nm = a.label, st = `${cap(a.status)}${kind ? ' · ' + (VERB[kind] || '') + (last && last.target ? ' ' + cut(last.target.split('/').pop(), 28) : '') : ''}`
+  g.font = `600 17px ${F.head}`; const w1 = g.measureText(nm).width; g.font = `11px ${F.mono}`; const w2 = g.measureText(st).width
+  const bw = Math.max(w1, w2) + 24, ny = cy + R * 0.58
+  g.fillStyle = C.chip; g.fillRect(cx - bw / 2, ny - 6, bw, 44)
+  g.font = `600 17px ${F.head}`; g.fillStyle = C.text; g.fillText(nm, cx, ny)
+  g.font = `11px ${F.mono}`; g.fillStyle = kind === 'error' ? C.red : sc; g.fillText(st, cx, ny + 21)
+  // a result banner above the centre: tests, finishing, errors
+  if (n.fx && now - n.fx.t0 < 2600 && /pass|fail|error|done/.test(n.fx.kind)) {
+    const txt = n.fx.kind === 'pass' ? `Tests passed · ${n.fx.label}` : n.fx.kind === 'fail' ? `Tests failed · ${n.fx.label}` : n.fx.kind === 'done' ? 'Finished' : 'Error'
+    g.font = `600 14px ${F.head}`; const w = g.measureText(txt).width + 22
+    g.fillStyle = n.fx.color; g.fillRect(cx - w / 2, cy - R * 0.72, w, 24); g.fillStyle = C.bg; g.textBaseline = 'middle'; g.fillText(txt, cx, cy - R * 0.72 + 12)
+  }
+  // "+12" floating off the tip of an edit
+  for (let i = coreFloats.length - 1; i >= 0; i--) {
+    const f = coreFloats[i], e = now - f.t0; if (e > 1500) { coreFloats.splice(i, 1); continue }
+    if (e < 0) continue
+    const [x, y] = P(f.ux, f.uy); g.globalAlpha = 1 - e / 1500; g.font = `700 20px ${F.head}`; g.fillStyle = f.col; g.textAlign = 'center'; g.textBaseline = 'middle'
+    g.shadowColor = f.col; g.shadowBlur = 10; g.fillText(f.text, x, y - 12 - e / 1500 * 40); g.shadowBlur = 0; g.globalAlpha = 1
+  }
+  // bottom right: what it is doing now
+  const rx = L.AW - 32, ry = H - 112
+  g.textAlign = 'right'; g.textBaseline = 'top'
+  g.font = `10px ${F.mono}`; g.fillStyle = C.muted; g.fillText('NOW', rx, ry)
+  g.font = `700 28px ${F.head}`; g.fillStyle = kind ? (kind === 'error' ? C.red : KIND[kind]) : C.muted; g.fillText(kind ? VERB[kind] : a.status === 'done' ? 'Finished' : 'Thinking', rx, ry + 14)
+  g.font = `12px ${F.mono}`; g.fillStyle = C.text; g.fillText(last ? cut(last.target || last.tool, 48) : '', rx, ry + 48)
+  g.fillStyle = C.muted; g.fillText(`${a.steps.filter(s => now - s.at < 60000).length} actions in the last minute`, rx, ry + 66)
+}
+function wrapText(text, x, y, maxW, lh, maxLines) {
+  const lines = []; let line = ''
+  for (const w of String(text).split(/\s+/)) { const t = line ? line + ' ' + w : w; if (line && g.measureText(t).width > maxW) { lines.push(line); line = w } else line = t }
+  if (line) lines.push(line)
+  if (lines.length > maxLines) { lines.length = maxLines; lines[maxLines - 1] = lines[maxLines - 1].replace(/\S{0,2}$/, '…') }
+  lines.forEach((l, i) => g.fillText(l, x, y + i * lh))
+  return lines.length
+}
+
+// ---------- task brief: a small card beside the clicked agent ----------
+const briefEl = document.getElementById('brief')
+let briefId = null, briefHtml = ''
+function openBrief(id) { briefId = id; briefHtml = ''; briefEl.classList.remove('on'); void briefEl.offsetWidth; briefEl.classList.add('on'); renderBrief(); placeBrief() }
+function closeBrief() { briefId = null; briefEl.classList.remove('on') }
+function renderBrief() {
+  const n = briefId && nodes.get(briefId)
+  if (!n) { if (briefId) closeBrief(); return }
+  const a = n.a, sc = a.status === 'working' ? C.cyan : a.status === 'done' ? C.green : C.dim
+  const last = a.updates[a.updates.length - 1]
+  const html = `<button class="x" title="Close (Esc)">×</button>
+    <div class="label">Task</div><h3>${esc(a.label)}</h3>
+    <span class="chip" style="color:${sc}">${esc(a.status)}</span><span class="chip" style="color:var(--dim)">up ${ago(a.startedAt)}</span>${a.parentId ? '' : '<span class="chip" style="color:var(--yellow)">main</span>'}
+    ${a.goal ? `<div class="goal">${esc(a.goal)}</div>` : ''}
+    ${a.task ? (a.task === a.goal ? '' : `<p>${esc(a.task)}</p>`) : `<p class="none">${a.parentId ? 'No brief on file. This helper started before Agent Web was watching.' : 'No brief yet. It shows your next prompt.'}</p>`}
+    ${a.plan && a.plan.length ? `<div class="label" style="margin-top:10px">Plan · ${a.plan.filter(s => s.status === 'completed').length} of ${a.plan.length} done</div><div class="plan">${a.plan.map(s => `<div class="p-${s.status}">${s.status === 'completed' ? '✓' : s.status === 'in_progress' ? '▶' : '○'} ${esc(s.text)}</div>`).join('')}</div>` : ''}
+    ${last ? `<div class="now"><b>${a.status === 'working' ? 'Now:' : 'Last:'}</b> ${esc(last.text)}</div>` : ''}`
+  if (html !== briefHtml) { briefHtml = html; briefEl.innerHTML = html; briefEl.querySelector('.x').onclick = closeBrief }
+}
+/** Keeps the card beside its agent as the web moves, on whichever side has room. */
+function placeBrief() {
+  const n = briefId && nodes.get(briefId)
+  if (!n) return
+  const w = briefEl.offsetWidth, h = briefEl.offsetHeight, gap = n.id === layout.root ? 80 : 62
+  const panel = document.getElementById('panel'), right = panel.classList.contains('hidden') ? innerWidth - 12 : panel.getBoundingClientRect().left - 12
+  let x = n.x + gap
+  if (x + w > right) x = n.x - gap - w
+  const y = Math.max(82, Math.min(innerHeight - h - 12, n.y - 40))
+  briefEl.style.left = Math.max(12, x) + 'px'; briefEl.style.top = y + 'px'
+}
+
+// ---------- activity log box: drag by its bar, expand with the button, double-click or L ----------
+const logEl = document.getElementById('log')
+let logOpen = false
+const saved = (() => { try { return JSON.parse(localStorage.getItem('agentWebLog') || 'null') } catch { return null } })()
+function saveLog() {
+  const r = logEl.getBoundingClientRect()
+  try { localStorage.setItem('agentWebLog', JSON.stringify({ x: r.left, y: r.top, open: logOpen, moved: logEl.style.top !== '' })) } catch {}
+}
+/** Moves the box to x,y, kept fully on screen. */
+function placeLog(x, y) {
+  const r = logEl.getBoundingClientRect()
+  Object.assign(logEl.style, {
+    left: Math.max(0, Math.min(innerWidth - r.width, x)) + 'px',
+    top: Math.max(0, Math.min(innerHeight - r.height, y)) + 'px',
+    bottom: 'auto',
+  })
+}
+function toggleLog() {
+  logOpen = !logOpen
+  logEl.classList.toggle('open', logOpen)
+  document.getElementById('logBtn').textContent = logOpen ? '▁' : '▢'
+  renderLog()
+  if (logEl.style.top) { const r = logEl.getBoundingClientRect(); placeLog(r.left, r.top) }
+  saveLog()
+}
+document.getElementById('logBtn').onclick = toggleLog
+const bar = document.getElementById('logBar')
+bar.addEventListener('dblclick', e => { if (e.target.tagName !== 'BUTTON') toggleLog() })
+bar.addEventListener('pointerdown', e => {
+  if (e.target.tagName === 'BUTTON') return
+  const r = logEl.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top
+  bar.setPointerCapture(e.pointerId)
+  const move = ev => placeLog(ev.clientX - dx, ev.clientY - dy)
+  const up = () => { bar.removeEventListener('pointermove', move); bar.removeEventListener('pointerup', up); saveLog() }
+  bar.addEventListener('pointermove', move)
+  bar.addEventListener('pointerup', up)
+})
+if (saved?.open) toggleLog()
+if (saved?.moved) placeLog(saved.x, saved.y)
+addEventListener('resize', () => { if (logEl.style.top) { const r = logEl.getBoundingClientRect(); placeLog(r.left, r.top) } })
+
+// ---------- site preview: the site being built, loaded live and reloaded when its files change ----------
+const pvEl = document.getElementById('preview'), pvFrame = document.getElementById('pvFrame')
+let pv = null, pvOpen = false, pvShownOnce = false, pvTimer = 0
+const pvSaved = (() => { try { return JSON.parse(localStorage.getItem('agentWebPreview') || 'null') } catch { return null } })()
+function savePv() { const r = pvEl.getBoundingClientRect(); try { localStorage.setItem('agentWebPreview', JSON.stringify({ x: r.left, y: r.top, w: r.width, h: r.height, open: pvOpen, moved: pvEl.style.top !== '' })) } catch {} }
+const pvSrc = p => (p.kind === 'file' ? p.url + '?v=' + p.rev : p.url)
+function togglePv(force) {
+  pvOpen = force === undefined ? !pvOpen : force
+  pvEl.hidden = !pvOpen
+  if (pvOpen && pv && !pvFrame.getAttribute('src')) pvFrame.src = pvSrc(pv)
+  savePv()
+}
+function setPreview(p) {
+  if (p && p.kind === 'blocked') {
+    document.getElementById('pvNone').textContent = `Not previewing ${p.file}: it sits in ${p.root}, a folder too broad to share (home, Desktop, Downloads, temp or system). A site inside a project folder previews normally.`
+    p = null
+  } else document.getElementById('pvNone').textContent = 'No site yet. When an agent edits an HTML file, or starts a dev server, the site shows here and updates as it changes.'
+  const same = pv && p && pv.url === p.url
+  if (p && !same) { pvFrame.src = pvSrc(p); if (!pvShownOnce) { pvShownOnce = true; if (!pvOpen) togglePv(true) } }
+  else if (p && same && p.rev !== pv.rev && p.kind === 'file') { clearTimeout(pvTimer); pvTimer = setTimeout(() => { pvFrame.src = pvSrc(p) }, 300) }
+  if (!p && pv) pvFrame.removeAttribute('src')
+  pv = p || null
+  pvFrame.style.display = pv ? '' : 'none'
+  document.getElementById('pvNone').style.display = pv ? 'none' : ''
+  document.getElementById('pvTitle').textContent = pv ? pv.title || (pv.kind === 'file' ? pv.file : pv.url.replace(/^https?:\/\//, '')) : 'Site preview'
+  document.getElementById('pvNote').textContent = pv ? `${pv.agent} · ${pv.kind === 'file' ? 'reloads when its files change' : 'live from its dev server'}` : ''
+  document.getElementById('pvOpen').href = pv ? pvSrc(pv) : '#'
+}
+document.getElementById('pvReload').onclick = () => { if (pv) pvFrame.src = pvSrc(pv) }
+document.getElementById('pvClose').onclick = () => togglePv(false)
+document.getElementById('siteBtn').onclick = () => togglePv()
+const pvBar = document.getElementById('pvBar')
+pvBar.addEventListener('pointerdown', e => {
+  if (e.target.closest('button, a, select')) return
+  const r = pvEl.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top
+  pvBar.setPointerCapture(e.pointerId)
+  const move = ev => Object.assign(pvEl.style, { left: Math.max(0, Math.min(innerWidth - r.width, ev.clientX - dx)) + 'px', top: Math.max(0, Math.min(innerHeight - 40, ev.clientY - dy)) + 'px', bottom: 'auto' })
+  const up = () => { pvBar.removeEventListener('pointermove', move); pvBar.removeEventListener('pointerup', up); savePv() }
+  pvBar.addEventListener('pointermove', move); pvBar.addEventListener('pointerup', up)
+})
+if (pvSaved) {
+  if (pvSaved.w) Object.assign(pvEl.style, { width: pvSaved.w + 'px', height: pvSaved.h + 'px' })
+  if (pvSaved.moved) Object.assign(pvEl.style, { left: Math.max(0, Math.min(innerWidth - 200, pvSaved.x)) + 'px', top: Math.max(0, Math.min(innerHeight - 40, pvSaved.y)) + 'px', bottom: 'auto' })
+  if (pvSaved.open) { pvShownOnce = true; togglePv(true) } else if (pvSaved.open === false) pvShownOnce = true
+}
+new ResizeObserver(() => { clearTimeout(pvEl._t); pvEl._t = setTimeout(() => { if (pvOpen) savePv() }, 300) }).observe(pvEl)
+
+// ---------- attention: an agent waiting on you, or stuck ----------
+/** The mod decides what needs the person (one tested rule for both surfaces); the page adds colour and a live "how long". */
+function attention(a, now) {
+  const t = a.attention
+  if (t !== undefined) return t ? { ...t, color: t.kind === 'wait' ? C.yellow : C.amber, text: t.since ? `${t.text} · ${ago(t.since)}` : t.text } : null
+  return attentionLocal(a, now)
+}
+// shortcut: only the ?demo feed, which has no mod behind it, still works this out on the page.
+function attentionLocal(a, now) {
+  if (a.status !== 'working') return null
+  if (a.waiting) return now - a.waiting.since < 30000 ? null : { kind: 'wait', color: C.yellow, short: 'Needs you', since: a.waiting.since, text: `Waiting for your approval · ${a.waiting.tool} · ${ago(a.waiting.since)}` }
+  const st = a.steps || [], last3 = st.slice(-3)
+  if (last3.length === 3 && last3.every(x => x.isError)) {
+    const same = last3.every(x => x.tool === last3[0].tool && x.target === last3[0].target)
+    return { kind: 'stuck', color: C.amber, short: 'Stuck', text: same ? `The same ${last3[0].tool} failed 3 times in a row` : 'Its last 3 actions failed' }
+  }
+  const last10 = st.slice(-10), bad = last10.filter(x => x.isError).length
+  if (last10.length >= 6 && bad >= 5) return { kind: 'stuck', color: C.amber, short: 'Struggling', text: `${bad} of its last ${last10.length} actions failed` }
+  const ls = st[st.length - 1]
+  if (ls && ls.isDone && now - (ls.endAt || ls.at) > 180000) return { kind: 'quiet', color: C.amber, short: 'Quiet', text: `No action for ${ago(ls.endAt || ls.at)}` }
+  return null
+}
+/** A pill above an agent: "Needs you" in yellow, "Stuck" in amber. */
+function drawBadge(x, y, att, now, big) {
+  const label = `${ATT_ICON[att.kind] || ''} ${att.short}`   // the shape tells the alerts apart without colour
+  g.font = `700 ${big ? 15 : 12}px ${F.head}`
+  const w = g.measureText(label).width + (big ? 26 : 18), h = big ? 24 : 18
+  g.globalAlpha = 0.75 + 0.25 * Math.sin(now / 480)
+  g.fillStyle = att.color; g.fillRect(x - w / 2, y - h / 2, w, h)
+  g.fillStyle = C.bg; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(label, x, y + 1)
+  g.globalAlpha = 1
+  if (big) { g.font = `12px ${F.mono}`; g.fillStyle = att.color; g.fillText(att.text, x, y + 24) }
+}
+setInterval(() => { if (snap.agents && snap.agents.length) renderHud() }, 5000)
+
+// ---------- fireworks: the project is done ----------
+const fw = { rockets: [], parts: [], until: 0, t0: -1e9, text: '', next: 0 }
+const fwCols = () => [C.green, C.cyan, C.yellow, C.purple, C.amber, C.blue, C.red, C.packet]
+function launchFireworks(text) { const now = Date.now(); fw.t0 = now; fw.until = now + 7000; fw.text = text; fw.next = now }
+function drawFireworks(now) {
+  if (now < fw.until && now >= fw.next) {
+    fw.next = now + (LOW ? 520 : 300) * (0.6 + Math.random() * 0.8)
+    fw.rockets.push({ x: W * (0.15 + Math.random() * 0.7), y: H + 10, vx: (Math.random() - 0.5) * 1.6, vy: -Math.sqrt(H * 0.32) * (0.85 + Math.random() * 0.3), col: fwCols()[Math.random() * 8 | 0], trail: [] })
+  }
+  if (!fw.rockets.length && !fw.parts.length && now - fw.t0 > 7000) return
+  // moves by elapsed time, so it runs at the same speed at 12, 30 or 60 frames a second
+  const dt = Math.min(6, (now - (fw.last || now)) / 16.7) || 1; fw.last = now
+  g.save()
+  for (let i = fw.rockets.length - 1; i >= 0; i--) {
+    const r = fw.rockets[i]; r.trail.push([r.x, r.y]); if (r.trail.length > 8) r.trail.shift()
+    r.x += r.vx * dt; r.y += r.vy * dt; r.vy += 0.16 * dt
+    g.strokeStyle = r.col; g.lineWidth = 2; g.beginPath(); r.trail.forEach(([x, y], j) => g[j ? 'lineTo' : 'moveTo'](x, y)); g.lineTo(r.x, r.y); g.stroke()
+    if (r.vy > -1.2) {
+      const n = LOW ? 40 : 90, ring = Math.random() < 0.35
+      for (let k = 0; k < n; k++) { const t = k / n * Math.PI * 2 + Math.random() * 0.1, sp = ring ? 4.2 : 1 + Math.random() * 4.2; fw.parts.push({ x: r.x, y: r.y, px: r.x, py: r.y, vx: Math.cos(t) * sp, vy: Math.sin(t) * sp, life: 1, col: Math.random() < 0.2 ? '#ffffff' : r.col }) }
+      fw.rockets.splice(i, 1)
+    }
+  }
+  // sparks drawn in batches, one stroke per colour and brightness step, not one per spark
+  const drag = Math.pow(0.985, dt), groups = new Map()
+  fw.parts = fw.parts.filter(p => (p.life -= 0.011 * dt) > 0)
+  for (const p of fw.parts) {
+    p.px = p.x; p.py = p.y; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= drag; p.vy = p.vy * drag + 0.05 * dt
+    const key = p.col + '|' + Math.ceil(p.life * 5); let list = groups.get(key); if (!list) groups.set(key, list = []); list.push(p)
+  }
+  g.lineWidth = 1.8
+  for (const [key, list] of groups) {
+    const [col, step] = key.split('|'); g.strokeStyle = col; g.globalAlpha = Number(step) / 5
+    g.beginPath(); for (const p of list) { g.moveTo(p.px, p.py); g.lineTo(p.x, p.y) } g.stroke()
+  }
+  g.restore(); g.globalAlpha = 1
+  const e = now - fw.t0
+  if (e < 6500) {
+    g.globalAlpha = Math.max(0, Math.min(1, e / 400, (6500 - e) / 800)); g.textAlign = 'center'; g.textBaseline = 'middle'
+    g.fillStyle = C.chip; g.fillRect(0, H * 0.3 - 52, W, 120)
+    g.font = `700 54px ${F.head}`; g.fillStyle = C.text; g.shadowColor = C.cyan; g.shadowBlur = 24; g.fillText('Project complete', W / 2, H * 0.3); g.shadowBlur = 0
+    g.font = `600 18px ${F.head}`; g.fillStyle = C.yellow; g.fillText(cut(fw.text, 100), W / 2, H * 0.3 + 44)
+    g.globalAlpha = 1
+  }
+}
+
+// ---------- replay: every state since this window opened, to scrub back through ----------
+const history = []          // { t, s }: an agent unchanged since the frame before is shared, not copied
+const seenAgent = new Map()
+let replaying = false, rpIdx = 0, rpPlay = false, rpSpeed = 4, rpTimer = 0, liveLog = null, latest = null
+function record(s) {
+  const agents = (s.agents || []).map(a => { const j = JSON.stringify(a), old = seenAgent.get(a.id); if (old && old.j === j) return old.a; seenAgent.set(a.id, { j, a }); return a })
+  const fr = { t: Date.now(), s: { ...s, agents } }, prev = history[history.length - 1]
+  if (prev && fr.t - prev.t < 500) history[history.length - 1] = fr; else history.push(fr)
+  if (history.length > 3000) history.shift()
+  if (replaying) updateReplayBar()
+}
+/** Every new state goes through here: kept for replay, drawn unless a replay is showing. */
+function ingest(s) { latest = s; record(s); if (!replaying) apply(s) }
+const rpEl = document.getElementById('replay'), rpRange = document.getElementById('rpRange')
+function openReplay() {
+  if (history.length < 2) return
+  replaying = true; liveLog = logRows.slice(); rpEl.hidden = false; rpIdx = history.length - 1
+  document.getElementById('replayBtn').classList.add('on'); updateReplayBar(); uplinkText.textContent = 'Replay'
+}
+function closeReplay() {
+  replaying = false; rpPlay = false; clearTimeout(rpTimer); rpEl.hidden = true
+  document.getElementById('replayBtn').classList.remove('on')
+  if (liveLog) { logRows.length = 0; logRows.push(...liveLog); renderLog() }
+  uplinkText.textContent = new URLSearchParams(location.search).has('demo') ? 'Demo' : 'Live'
+  if (latest) apply(latest, true)
+}
+function seek(i, quiet) { rpIdx = Math.max(0, Math.min(history.length - 1, i)); apply(history[rpIdx].s, quiet); updateReplayBar() }
+function updateReplayBar() {
+  rpRange.max = String(history.length - 1); rpRange.value = String(rpIdx)
+  const f = history[rpIdx], d = f ? Date.now() - f.t : 0
+  document.getElementById('rpTime').textContent = f ? `${clock(f.t)} · ${d < 5000 ? 'now' : ago(f.t) + ' ago'}` : ''
+  document.getElementById('rpPlay').textContent = rpPlay ? '❚❚' : '▶'
+  document.getElementById('rpSpeed').textContent = rpSpeed + '×'
+}
+function playStep() {
+  if (!rpPlay) return
+  if (rpIdx >= history.length - 1) { rpPlay = false; updateReplayBar(); return }
+  const dt = history[rpIdx + 1].t - history[rpIdx].t
+  rpTimer = setTimeout(() => { seek(rpIdx + 1, false); playStep() }, Math.max(30, Math.min(3000, dt) / rpSpeed))
+}
+rpRange.oninput = () => { rpPlay = false; clearTimeout(rpTimer); seek(+rpRange.value, true) }
+document.getElementById('rpPlay').onclick = () => { rpPlay = !rpPlay; clearTimeout(rpTimer); if (rpPlay && rpIdx >= history.length - 1) seek(0, true); updateReplayBar(); playStep() }
+document.getElementById('rpSpeed').onclick = () => { rpSpeed = rpSpeed === 1 ? 4 : rpSpeed === 4 ? 16 : 1; updateReplayBar() }
+document.getElementById('rpLive').onclick = closeReplay
+document.getElementById('replayBtn').onclick = () => (replaying ? closeReplay() : openReplay())
+
+// ---------- which site to preview: automatic, or a dev server picked from those found running ----------
+let pvChoice = (() => { try { return localStorage.getItem('agentWebPick') || 'auto' } catch { return 'auto' } })()
+function choosePreview(st) {
+  const list = st.servers || [], sel = document.getElementById('pvPick'), sig = list.map(x => x.url).join('|')
+  if (sel.dataset.sig !== sig) {
+    sel.dataset.sig = sig
+    sel.innerHTML = '<option value="auto">Auto</option>' + list.map(x => `<option value="${esc(x.url)}">${esc(x.url.replace(/^https?:\/\//, ''))} · ${esc(x.cmd)}</option>`).join('')
+  }
+  sel.style.display = list.length ? '' : 'none'
+  const pick = list.find(x => x.url === pvChoice)
+  sel.value = pick ? pick.url : 'auto'
+  return pick ? { kind: 'server', url: pick.url, agent: `Running on this Mac (${pick.cmd})`, rev: 0 } : st.preview
+}
+document.getElementById('pvPick').onchange = e => { pvChoice = e.target.value; try { localStorage.setItem('agentWebPick', pvChoice) } catch {} if (latest) setPreview(choosePreview(latest)) }
+
+// ---------- guide: the reactive effects, each a small core firing on a loop ----------
+const FX_TILES = [
+  { kind: 'edit', name: 'Edit', col: 'green', when: 'It changes or writes a file.', fires: 'A green chain races out from the core and +N rises off its tip. Bigger edits light more neurons.' },
+  { kind: 'read', name: 'Read', col: 'cyan', when: 'It opens a file or reads a page of code.', fires: 'A cyan scan line sweeps the sphere and the neurons it passes flicker on.' },
+  { kind: 'search', name: 'Search', col: 'yellow', when: 'It searches the code (grep, glob).', fires: 'A yellow radar sweep turns round the core, dropping a ripple with each hit.' },
+  { kind: 'run', name: 'Run', col: 'amber', when: 'It runs a command or the tests.', fires: 'Amber rings pulse out from the core until the command ends.' },
+  { kind: 'browse', name: 'Web', col: 'blue', when: 'It browses or fetches a web page.', fires: 'A blue globe grid turns and lines reach past the shell to outside nodes.' },
+  { kind: 'agent', name: 'Helper', col: 'purple', when: 'It hands work to a helper agent.', fires: 'A purple bud splits off the shell. Once a second agent runs, the web view takes over.' },
+  { kind: 'error', name: 'Error', col: 'red', when: 'A tool call fails or is denied.', fires: 'The chain misfires red and stops short, and the shell shakes.' },
+  { kind: 'lock', name: 'Step done', col: 'green', when: 'It ticks off a plan step.', fires: 'That step’s cluster locks inside a green hex and stays lit for the rest of the run.' },
+  { kind: 'goal', name: 'Goal reached', col: 'yellow', when: 'Every plan step is done.', fires: 'The whole network flares yellow and the fireworks go off.' },
+]
+let fxTiles = null, guideRaf = 0
+function buildFxGrid() {
+  if (fxTiles) return
+  const grid = document.getElementById('fxGrid')
+  grid.innerHTML = FX_TILES.map((t, i) => `<div class="fxt"><canvas width="170" height="170" aria-hidden="true"></canvas><div><div class="n">${String(i + 1).padStart(2, '0')} / ${String(FX_TILES.length).padStart(2, '0')}</div><h3 style="color:${C[t.col]}">${esc(t.name)}</h3><div class="k">WHEN</div><p>${esc(t.when)}</p><div class="k">FIRES</div><p>${esc(t.fires)}</p></div></div>`).join('')
+  const dpr = Math.min(2, window.devicePixelRatio || 1)
+  fxTiles = FX_TILES.map((t, i) => {
+    const cv2 = grid.querySelectorAll('canvas')[i]; cv2.width = 170 * dpr; cv2.height = 170 * dpr
+    return { ...t, ctx: cv2.getContext('2d'), dpr, S: 170, net: makeNet(101 + i * 17), t0: Date.now() - i * 230, ang: t.kind === 'browse' ? 0.7 : t.kind === 'lock' ? 2.4 : -0.65, cyc: -1, chain: null }
+  })
+}
+function tileChain(t) {
+  const net = t.net, tx = Math.cos(t.ang) * 1.1, ty = Math.sin(t.ang) * 1.1, d = i => Math.hypot(net.ns[i].x - tx, net.ns[i].y - ty)
+  const chain = [net.core], links = []
+  for (let h = 0, at = net.core; h < 12; h++) {
+    const opts = net.adj[at].map(li => { const l = net.links[li]; return { li, j: l.a === at ? l.b : l.a } }).filter(o => !chain.includes(o.j) && d(o.j) < d(at)).sort((p, q) => d(p.j) - d(q.j))
+    if (!opts.length) break
+    const o = opts[opts.length > 1 && Math.random() < 0.35 ? 1 : 0]; chain.push(o.j); links.push(o.li); at = o.j
+  }
+  if (t.kind === 'error') { chain.length = Math.max(2, Math.ceil(chain.length * 0.5)); links.length = chain.length - 1 }
+  return { chain, links }
+}
+function drawTile(t, now) {
+  const c = t.ctx, S = t.S, cx = S / 2, cy = S / 2, R = S * 0.33, net = t.net, col = C[t.col]
+  const P = (u, v) => [cx + u * R, cy + v * R]
+  const period = t.kind === 'goal' ? 2600 : 1700, e = (now - t.t0) % period, cyc = Math.floor((now - t.t0) / period)
+  if (cyc !== t.cyc) { t.cyc = cyc; t.fire = tileChain(t) }
+  const { chain, links } = t.fire, tsec = (now % 3600000) / 1000
+  c.setTransform(t.dpr, 0, 0, t.dpr, 0, 0); c.clearRect(0, 0, S, S)
+  c.save()
+  if (t.kind === 'error' && e > 300 && e < 900) c.translate((Math.random() - 0.5) * 5, (Math.random() - 0.5) * 3)
+  // the shell: glow, outline, turning ticks
+  const flare = t.kind === 'goal' ? Math.max(0, 1 - Math.abs(e - 500) / 900) : 0
+  const gr = c.createRadialGradient(cx, cy - R * 0.1, 0, cx, cy, R * 1.15)
+  if (t.kind === 'goal') { gr.addColorStop(0, `rgba(252,238,10,${0.25 + 0.35 * flare})`); gr.addColorStop(1, 'rgba(0,0,0,0)') }
+  else { gr.addColorStop(0, `rgba(${C.glow0},.32)`); gr.addColorStop(0.4, `rgba(${C.glow1},.16)`); gr.addColorStop(1, 'rgba(0,0,0,0)') }
+  c.fillStyle = gr; c.beginPath(); c.arc(cx, cy, R * 1.15, 0, Math.PI * 2); c.fill()
+  c.strokeStyle = t.kind === 'error' && e > 300 && e < 900 ? C.red : t.kind === 'goal' ? `rgba(252,238,10,${0.4 + 0.5 * flare})` : C.shell; c.lineWidth = t.kind === 'goal' ? 2 : 1
+  c.beginPath(); c.arc(cx, cy, R, 0, Math.PI * 2); c.stroke()
+  c.save(); c.translate(cx, cy); c.rotate(tsec * 0.12)
+  net.ticks.forEach((k, i) => { if (i % 3) return; const a = i / net.ticks.length * Math.PI * 2, r0 = R * 1.14, r1 = r0 + k.len * R * 0.8; c.strokeStyle = `rgba(${C.tickRGB},${k.o * 0.8})`; c.lineWidth = 1; c.beginPath(); c.moveTo(Math.cos(a) * r0, Math.sin(a) * r0); c.lineTo(Math.cos(a) * r1, Math.sin(a) * r1); c.stroke() })
+  c.restore()
+  // light: the chain in flight, a cluster locked, or everything flaring
+  const nl = new Float32Array(net.ns.length), ll = new Float32Array(net.links.length)
+  chain.forEach((idx, i) => { const b = e >= i * 60 ? Math.max(0, 1 - (e - i * 60) / 900) : 0; nl[idx] = Math.max(nl[idx], b) })
+  links.forEach((li, i) => { const b = e >= i * 60 ? Math.max(0, 1 - (e - i * 60) / 800) : 0; ll[li] = Math.max(ll[li], b) })
+  const lockAt = [Math.cos(t.ang) * 0.55, Math.sin(t.ang) * 0.55]
+  if (t.kind === 'lock') net.ns.forEach((p, i) => { if (Math.hypot(p.x - lockAt[0], p.y - lockAt[1]) < 0.3) nl[i] = Math.max(nl[i], 0.85) })
+  if (t.kind === 'goal') { nl.fill(flare); ll.fill(flare * 0.8) }
+  if (t.kind === 'read') { const sy = -1 + ((tsec * 0.9) % 2); net.ns.forEach((p, i) => { if (Math.abs(p.y - sy) < 0.08) nl[i] = Math.max(nl[i], 0.8) }) }
+  const lit = t.kind === 'goal' ? C.yellow : t.kind === 'error' ? C.red : col
+  net.links.forEach((l, i) => {
+    const [x1, y1] = P(net.ns[l.a].x, net.ns[l.a].y), [x2, y2] = P(net.ns[l.b].x, net.ns[l.b].y), b = ll[i]
+    c.strokeStyle = b > 0.02 ? lit : C.link; c.globalAlpha = b > 0.02 ? 0.35 + 0.65 * b : 1; c.lineWidth = 0.6 + b * 1.6
+    c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke()
+  })
+  c.globalAlpha = 1
+  net.ns.forEach((p, i) => { const [x, y] = P(p.x, p.y), b = nl[i]; c.fillStyle = b > 0.05 ? lit : C.neuron; c.beginPath(); c.arc(x, y, Math.max(0.7, p.s * 0.45 + b * 2), 0, Math.PI * 2); c.fill() })
+  const hi = e / 60
+  if (hi < chain.length - 1 && t.kind !== 'goal') { const i = Math.floor(hi), k = hi - i, A = net.ns[chain[i]], B = net.ns[chain[i + 1]], [x, y] = P(A.x + (B.x - A.x) * k, A.y + (B.y - A.y) * k); c.fillStyle = '#fff'; c.shadowColor = lit; c.shadowBlur = 10; c.beginPath(); c.arc(x, y, 2.4, 0, Math.PI * 2); c.fill(); c.shadowBlur = 0 }
+  // the effect for this kind of action
+  const tip = net.ns[chain[chain.length - 1]], [tx, ty] = P(tip.x, tip.y), q = e / period
+  c.save(); c.beginPath(); c.arc(cx, cy, R, 0, Math.PI * 2); c.clip()
+  if (t.kind === 'read') { const sy = cy + (-1 + ((tsec * 0.9) % 2)) * R; c.fillStyle = 'rgba(0,229,255,.14)'; c.fillRect(cx - R, sy - 12, 2 * R, 12); c.fillStyle = C.cyan; c.fillRect(cx - R, sy, 2 * R, 2) }
+  if (t.kind === 'search' && c.createConicGradient) { const g2 = c.createConicGradient(tsec * 2.4, cx, cy); g2.addColorStop(0, `rgba(${C.goalRGB},.4)`); g2.addColorStop(0.14, `rgba(${C.goalRGB},0)`); g2.addColorStop(1, `rgba(${C.goalRGB},0)`); c.fillStyle = g2; c.fillRect(cx - R, cy - R, 2 * R, 2 * R) }
+  if (t.kind === 'browse') { c.strokeStyle = 'rgba(61,139,255,.6)'; c.lineWidth = 1; for (let i = 0; i < 4; i++) { c.beginPath(); c.ellipse(cx, cy, Math.max(0.5, R * Math.abs(Math.cos(tsec * 0.9 + i * Math.PI / 4))), R, 0, 0, Math.PI * 2); c.stroke() } }
+  c.restore()
+  if (t.kind === 'search') { c.strokeStyle = C.yellow; c.globalAlpha = 1 - q; c.lineWidth = 1.4; c.beginPath(); c.arc(cx, cy, R * (0.3 + q * 0.8), 0, Math.PI * 2); c.stroke(); c.globalAlpha = 1 }
+  if (t.kind === 'run') for (let i = 0; i < 3; i++) { const k = ((tsec * 0.8 + i / 3) % 1); c.strokeStyle = C.amber; c.globalAlpha = (1 - k) * 0.8; c.lineWidth = 3 * (1 - k) + 0.8; c.beginPath(); c.arc(cx, cy, R * (0.15 + k * 1.05), 0, Math.PI * 2); c.stroke() }
+  if (t.kind === 'browse') for (let i = 0; i < 3; i++) { const a = 0.7 + i * 2.1, [x1, y1] = P(Math.cos(a) * 0.95, Math.sin(a) * 0.95), [x2, y2] = P(Math.cos(a) * 1.42, Math.sin(a) * 1.42); c.strokeStyle = C.blue; c.globalAlpha = 0.85; c.lineWidth = 1.3; c.setLineDash([3, 5]); c.lineDashOffset = -now / 30; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); c.setLineDash([]); c.lineDashOffset = 0; c.fillStyle = C.blue; c.beginPath(); c.arc(x2, y2, 3.2, 0, Math.PI * 2); c.fill() }
+  if (t.kind === 'agent') { const k = 0.5 + 0.5 * Math.sin(tsec * 4), [bx, by] = P(1.3, -0.95), [ex, ey] = P(0.66, -0.5); c.strokeStyle = C.purple; c.globalAlpha = 0.9; c.lineWidth = 1.6; c.setLineDash([3, 6]); c.lineDashOffset = -now / 30; c.beginPath(); c.moveTo(ex, ey); c.lineTo(bx, by); c.stroke(); c.setLineDash([]); c.lineDashOffset = 0; c.fillStyle = `rgba(179,107,255,${0.15 + 0.25 * k})`; c.beginPath(); c.arc(bx, by, 11, 0, Math.PI * 2); c.fill(); c.stroke() }
+  if (t.kind === 'error') { c.strokeStyle = C.red; c.globalAlpha = 0.85; c.lineWidth = 1.8; c.setLineDash([10, 5, 2, 7]); c.beginPath(); c.arc(cx, cy, R * 1.04, 0, Math.PI * 2); c.stroke(); c.setLineDash([]); if (e > 300 && e < 1100) { c.fillStyle = C.red; c.fillRect(cx - 26, cy - 9, 52, 18); c.fillStyle = C.bg; c.font = `700 12px ${F.head}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('Error', cx, cy + 1) } }
+  if (t.kind === 'edit' && e > chain.length * 60) { const k = (e - chain.length * 60) / 1100; if (k < 1) { c.globalAlpha = 1 - k; c.fillStyle = C.green; c.font = `700 16px ${F.head}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('+12', tx, ty - 8 - k * 26) } }
+  if (t.kind === 'lock') { const [lx, ly] = P(lockAt[0], lockAt[1]); c.save(); c.translate(lx, ly); c.beginPath(); for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + i * Math.PI / 3; c[i ? 'lineTo' : 'moveTo'](Math.cos(a) * R * 0.38, Math.sin(a) * R * 0.38) } c.closePath(); c.fillStyle = 'rgba(57,255,136,.1)'; c.fill(); c.strokeStyle = C.green; c.lineWidth = 1.8; c.stroke(); c.restore(); c.strokeStyle = C.green; c.globalAlpha = 1 - q; c.lineWidth = 1.2; c.beginPath(); c.arc(lx, ly, R * (0.4 + q * 0.4), 0, Math.PI * 2); c.stroke() }
+  if (t.kind === 'goal') { c.strokeStyle = C.yellow; c.globalAlpha = 1 - q; c.lineWidth = 2; c.beginPath(); c.arc(cx, cy, R * (0.9 + q * 0.5), 0, Math.PI * 2); c.stroke() }
+  c.globalAlpha = 1
+  // the agent at the centre
+  c.beginPath(); for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + i * Math.PI / 3; c[i ? 'lineTo' : 'moveTo'](cx + Math.cos(a) * 8, cy + Math.sin(a) * 8) } c.closePath(); c.strokeStyle = C.yellow; c.lineWidth = 1.2; c.stroke()
+  c.restore()
+}
+let guideLast = 0
+function guideFrame() {
+  if (document.getElementById('guide').hidden) { guideRaf = 0; return }
+  const now = Date.now()
+  if (now - guideLast >= 1000 / fps() - 4) { guideLast = now; for (const t of fxTiles) drawTile(t, now) }
+  guideRaf = requestAnimationFrame(guideFrame)
+}
+
+// ---------- back to the Claude app: the mod's server brings it to the front; else the claude:// link ----------
+async function backToClaude() {
+  try { const r = await fetch('/focus-claude', { method: 'POST', headers: { 'X-Agent-Web': '1' } }); if (r.ok) return } catch {}
+  location.href = 'claude://'
+}
+document.getElementById('backBtn').onclick = backToClaude
+
+// ---------- styles: swappable looks; each file in themes/ calls registerTheme (contract: themes/README.md) ----------
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)')
+const BASE = { C: { ...C }, F: { ...F } }
+const THEMES = {}, THEME_VARS = ['--bg', '--panel', '--panel2', '--line', '--cyan', '--yellow', '--red', '--green', '--purple', '--amber', '--blue', '--dim', '--text', '--muted', '--mono', '--head', '--clip', '--radius']
+let theme = null
+let wantTheme = (() => { const q = new URLSearchParams(location.search).get('theme'); if (q) return q; try { return localStorage.getItem('agentWebStyle') || 'neon' } catch { return 'neon' } })()
+function registerTheme(t) { THEMES[t.id] = t; syncStyleMenu(); if (t.id === wantTheme) applyTheme(t.id) }
+/** Switches the look: colours, fonts, CSS variables and the drawing hooks. `provisional` holds a look until the wanted one loads. */
+function applyTheme(id, provisional) {
+  const t = THEMES[id] || THEMES.neon
+  theme = t
+  if (!provisional) { wantTheme = t.id; try { localStorage.setItem('agentWebStyle', t.id) } catch {} }
+  Object.assign(C, BASE.C, t.colors || {})
+  Object.assign(F, BASE.F, t.fonts || {})
+  Object.assign(KIND, { edit: C.green, read: C.cyan, search: C.yellow, run: C.amber, browse: C.blue, agent: C.purple, other: C.dim }, t.kind || {})
+  Object.assign(TONE, { add: C.green, cut: C.red, pass: C.green, fail: C.red, error: C.red, info: C.cyan })
+  const st = document.documentElement.style
+  for (const k of THEME_VARS) st.removeProperty(k)
+  for (const [k, v] of Object.entries(t.css || {})) st.setProperty(k, v)
+  document.documentElement.dataset.theme = t.id
+  document.documentElement.style.colorScheme = t.light ? 'light' : 'dark'
+  document.documentElement.toggleAttribute('data-light', !!t.light)
+  if (t.fontUrl && !document.querySelector(`link[data-font="${t.id}"]`)) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = t.fontUrl; l.dataset.font = t.id; document.head.appendChild(l) }
+  renderLegend(); syncStyleMenu(); renderHud(); renderPanel(); renderBrief(); renderLog()
+  fxTiles = null; if (!document.getElementById('guide').hidden) buildFxGrid()
+}
+function syncStyleMenu() {
+  const sel = document.getElementById('styleSel'), ids = Object.keys(THEMES).sort((a, b) => (a === 'neon' ? -1 : b === 'neon' ? 1 : 0))
+  if (sel.dataset.ids !== ids.join()) { sel.dataset.ids = ids.join(); sel.innerHTML = ids.map(id => `<option value="${esc(id)}">Style: ${esc(THEMES[id].name || id)}</option>`).join('') }
+  if (theme) sel.value = theme.id
+}
+document.getElementById('styleSel').onchange = e => applyTheme(e.target.value)
+/** Steps to the next (+1) or previous (-1) style in menu order, wrapping around. */
+function stepTheme(d) { const ids = document.getElementById('styleSel').dataset.ids.split(','), i = ids.indexOf(theme ? theme.id : 'neon'); applyTheme(ids[(i + d + ids.length) % ids.length]) }
+/** Neon, the original look: a dot grid and two faint glows drifting on minute-long cycles. */
+function neonBackdrop(g, b) {
+  g.fillStyle = C.bg; g.fillRect(0, 0, b.W, b.H)
+  for (const [k, col] of [[0, C.accentRGB], [1, C.goalRGB]]) {
+    const x = b.W * (0.3 + 0.4 * Math.sin(b.t / (70 + k * 23) + k * 2)), y = b.H * (0.45 + 0.3 * Math.cos(b.t / (90 + k * 17) + k)), r = Math.max(b.W, b.H) * 0.5
+    const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, `rgba(${col},${k ? 0.03 : 0.055})`); gr.addColorStop(1, `rgba(${col},0)`)
+    g.fillStyle = gr; g.fillRect(0, 0, b.W, b.H)
+  }
+  const ox = Math.sin(b.t / 47) * 6, oy = Math.cos(b.t / 61) * 6
+  g.fillStyle = `rgba(${C.accentRGB},.07)`
+  for (let x = 20 + ox; x < b.W; x += 28) for (let y = 20 + oy; y < b.H; y += 28) g.fillRect(x, y, 1.2, 1.2)
+  // a few grid dots sit slightly brighter in the shape of Leo's sickle, Regulus the brightest; grid cells precomputed per size
+  if (!neonSickle || neonSickle.W !== b.W || neonSickle.H !== b.H) {
+    const c0 = Math.round(b.W * 0.07 / 28), r0 = Math.round(b.H * 0.42 / 28)   // left of the core, below the goal line, clear of the preview and log
+    neonSickle = { W: b.W, H: b.H, pts: [[-1, 0, 1], [-1, -2], [-2, -4], [-2, -6], [1, -7], [2, -6]].map(([c, r, reg]) => [20 + (c0 + c) * 28, 20 + (r0 + r) * 28, reg]) }
+  }
+  for (const [x, y, reg] of neonSickle.pts) { g.fillStyle = `rgba(${C.accentRGB},${reg ? 0.26 : 0.15})`; const s = reg ? 1.8 : 1.4; g.fillRect(x + ox - (s - 1.2) / 2, y + oy - (s - 1.2) / 2, s, s) }
+}
+let neonSickle = null
+
+// ---------- screensaver: after 10 idle minutes, or Z; any input ends it ----------
+const SAVER_AFTER = 10 * 60 * 1000
+let lastInput = Date.now(), saverSince = 0
+function setSaver(on) { document.body.classList.toggle('saver', on); saverSince = on ? Date.now() : 0; if (on) closeBrief(); renderHud(); refreshPower() }
+function wake(e) {
+  if (e.type === 'keydown' && (e.key === 'z' || e.key === 'Z')) return
+  lastInput = Date.now()
+  if (saverSince && Date.now() - saverSince > 1200) setSaver(false)   // a short grace, so the click that started it does not end it
+}
+for (const ev of ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart']) addEventListener(ev, wake, { passive: true })
+setInterval(() => { if (!MINI && !saverSince && Date.now() - lastInput > SAVER_AFTER) setSaver(true) }, 5000)
+document.getElementById('saverBtn').onclick = () => setSaver(true)
+
+// ---------- you are needed: an approval pending for a minute → orange edge glow and slow waves ----------
+function updateNudge() {
+  // per waiting agent, from live data: another agent's activity or a replay seek must not hold it off
+  const now = Date.now(), list = (latest || snap).agents || []
+  const waits = list.map(a => ({ a, t: attention(a, now) })).filter(x => x.t && x.t.kind === 'wait' && x.t.since && now - x.t.since > 60000)
+  const on = waits.length > 0
+  document.getElementById('nudge').classList.toggle('on', on)
+  if (on) {
+    const since = Math.min(...waits.map(w => w.t.since)), el = document.getElementById('nudgeMsg')
+    // hedged like the mod: after a minute the approval may have been answered already
+    const msg = `${waits.map(w => w.a.label).join(', ')} asked for your approval ${ago(since)} ago · check Claude`
+    if (el.textContent !== msg) el.textContent = msg   // role=alert re-announces every write
+  }
+}
+setInterval(updateNudge, 2000)
+
+// ---------- tabs: the live view and the guide ----------
+function showTab(name) {
+  const guide = name === 'guide'
+  document.getElementById('guide').hidden = !guide
+  document.getElementById('tabGuide').classList.toggle('on', guide)
+  document.getElementById('tabLive').classList.toggle('on', !guide)
+  if (guide) { buildFxGrid(); if (!guideRaf) guideRaf = requestAnimationFrame(guideFrame) }
+}
+document.getElementById('tabLive').onclick = () => showTab('live')
+document.getElementById('tabGuide').onclick = () => showTab('guide')
+if (location.hash === '#guide') showTab('guide')
+
+// ---------- input ----------
+function hit(x, y) {
+  for (const n of nodes.values()) {
+    if (layout.mission) { if (n.id === layout.mission && layout.core && Math.hypot(n.x - x, n.y - y) < layout.core.R) return n.id; continue }
+    if (Math.hypot(n.x - x, n.y - y) < (n.id === layout.root ? 60 : 44)) return n.id
+    if (n.card && x > n.card.x && x < n.card.x + n.card.w && y > n.card.y && y < n.card.y + n.card.h) return n.id
+  }
+  return null
+}
+// ---------- agent rail, attention queue, hover tip, mini window ----------
+const MINI = new URLSearchParams(location.search).has('mini')
+if (MINI) document.body.classList.add('mini')
+const ATT_ICON = { wait: '◆', stuck: '▲', quiet: '◌' }   // shape as well as colour
+const RAIL_W = 244
+let railFilter = 'all', railQuery = '', railHtml = '', jumpI = 0
+let railOn = true
+try { railOn = localStorage.getItem('agentWebRail') !== '0' } catch {}
+const railEl = document.getElementById('rail'), railList = document.getElementById('railList'), railQ = document.getElementById('railQ'), liveEl = document.getElementById('live')
+const railWidth = () => (MINI || layout.mission || !railOn || innerWidth < 900 ? 0 : RAIL_W)
+const RAIL_PRED = { all: () => true, working: r => r.a.status === 'working', need: r => !!r.att, err: r => r.err, done: r => r.a.status === 'done' }
+
+/** One row per agent: who needs you first, then who is working, then the rest; newest action first within each. */
+function agentRows() {
+  const now = Date.now()
+  return (snap.agents || []).map(a => {
+    const att = attention(a, now), st = a.steps || [], last = st[st.length - 1]
+    const doing = a.status === 'done' ? 'Finished' : a.waiting ? 'Waiting for approval'
+      : !last ? 'Starting' : last.isDenied ? '⊘ Denied: ' + last.tool : (VERB[last.kind] || 'Working') + ' ' + (last.target ? String(last.target).split('/').pop() : last.tool)
+    const rank = att ? (att.kind === 'wait' ? 0 : 1) : a.status === 'working' ? 2 : 3
+    return { a, att, doing, rank, at: last ? last.at : a.startedAt || 0, err: (a.errors || 0) > 0 }
+  }).sort((x, y) => x.rank - y.rank || y.at - x.at)
+}
+const dotColor = r => (r.att ? r.att.color : r.a.status === 'working' ? C.cyan : r.a.status === 'done' ? C.green : C.dim)
+
+function renderRail() {
+  const rows = agentRows(), q = railQuery.trim().toLowerCase()
+  const cnt = {}; for (const f in RAIL_PRED) cnt[f] = rows.filter(RAIL_PRED[f]).length
+  for (const b of document.querySelectorAll('#railChips button')) { b.classList.toggle('on', b.dataset.f === railFilter); b.querySelector('b').textContent = cnt[b.dataset.f] }
+  const need = cnt.need, working = cnt.working
+  const msg = `${rows.length} agents, ${working} working${need ? `, ${need} need attention` : ''}${cnt.err ? `, ${cnt.err} with errors` : ''}`
+  if (liveEl.textContent !== msg) liveEl.textContent = msg
+  const vis = rows.filter(r => RAIL_PRED[railFilter](r) && (!q || `${r.a.label} ${r.a.task || ''} ${r.doing}`.toLowerCase().includes(q)))
+  const html = vis.map(r => `<button class="rrow${r.att ? ' att' + (r.att.kind === 'wait' ? ' w' : '') : ''}${r.a.id === focusId ? ' sel' : ''}" data-id="${esc(r.a.id)}" title="${esc(r.a.label + ' · ' + r.doing)}"><i class="dot" style="background:${dotColor(r)}"></i><span class="rt"><b>${esc(r.a.label)}</b><em>${r.att ? ATT_ICON[r.att.kind] + ' ' + esc(r.att.short) + ' · ' : ''}${esc(r.doing)}${r.err ? ' · ' + r.a.errors + ' err' : ''}</em></span></button>`).join('') || '<div class="rempty">No agents match</div>'
+  if (html === railHtml) return
+  railHtml = html
+  const top = railList.scrollTop, fid = railList.contains(document.activeElement) && document.activeElement.dataset.id
+  railList.innerHTML = html; railList.scrollTop = top
+  if (fid) { const el = [...railList.children].find(c => c.dataset.id === fid); if (el) el.focus() }
+}
+function selectAgent(id) { focusId = id; document.getElementById('panel').classList.remove('hidden'); layout(); renderPanel(); openBrief(id); renderRail() }
+/** Oldest waiting first; each press moves to the next one. */
+function jumpAttention() {
+  const r = agentRows().filter(x => x.att).sort((a, b) => (a.att.since || 9e15) - (b.att.since || 9e15))
+  if (r.length) selectAgent(r[jumpI++ % r.length].a.id)
+}
+document.getElementById('railChips').onclick = e => { const b = e.target.closest('button'); if (b) { railFilter = b.dataset.f; railHtml = ''; renderRail() } }
+railList.onclick = e => { const b = e.target.closest('.rrow'); if (b) selectAgent(b.dataset.id) }
+railQ.oninput = () => { railQuery = railQ.value; renderRail() }
+railQ.onkeydown = e => { if (e.key === 'Escape') { railQ.value = ''; railQuery = ''; railQ.blur(); renderRail() } }
+document.getElementById('kpis').onclick = e => { if (e.target.closest('.kpi.att')) jumpAttention() }
+document.getElementById('kpis').onkeydown = e => { if (e.key === 'Enter' && e.target.closest('.kpi.att')) jumpAttention() }
+document.getElementById('legend').onclick = e => { if (e.target.id === 'keyGuide') showTab('guide') }
+function toggleRail() { railOn = !railOn; try { localStorage.setItem('agentWebRail', railOn ? '1' : '0') } catch {} layout() }
+
+/** ?mini: one status line that says whether everything is moving, who is slow or stuck, and how long since the last action. */
+const SLOW = 60000
+const lastAct = a => { const st = a.steps || [], l = st[st.length - 1]; return l ? Math.max(l.at, l.endAt || 0) : a.startedAt || 0 }
+let miniTick = 0
+function miniState(rows, now) {
+  const working = rows.filter(r => r.a.status === 'working'), newest = rows.reduce((m, r) => Math.max(m, lastAct(r.a)), 0)
+  const since = newest ? `last action ${ago(newest)}${ago(newest) === 'now' ? '' : ' ago'}` : 'no actions yet'
+  const counts = `${working.length} working · ${rows.length - working.length} done`
+  if (Date.now() - lastOk > 4000) return { cls: 'bad', head: 'NO SIGNAL', sub: `no update for ${ago(lastOk)} · check Claude is running` }
+  if (!rows.length) return { cls: 'idle', head: 'WAITING FOR AGENTS', sub: 'nothing started yet' }
+  const wait = rows.find(r => r.att && r.att.kind === 'wait'); if (wait) return { cls: 'need', head: `◆ NEEDS YOU`, sub: `${wait.a.label}: ${wait.att.text}` }
+  const stuck = rows.find(r => r.att && r.att.kind === 'stuck'); if (stuck) return { cls: 'warn', head: '▲ STUCK', sub: `${stuck.a.label}: ${stuck.att.text}` }
+  if (!working.length) return { cls: 'idle', head: 'ALL DONE', sub: `${counts} · ${since}` }
+  const slow = working.filter(r => now - lastAct(r.a) > SLOW).sort((x, y) => lastAct(x.a) - lastAct(y.a))
+  if (slow.length) return { cls: 'warn', head: 'SLOW', sub: `${slow[0].a.label} quiet ${ago(lastAct(slow[0].a))}${slow.length > 1 ? ` (+${slow.length - 1} more)` : ''} · ${counts}` }
+  return { cls: 'ok', head: 'RUNNING', sub: `${counts} · ${since}` }
+}
+function renderMini() {
+  if (!MINI) return
+  const st = miniState(agentRows(), Date.now())
+  document.getElementById('mini').innerHTML = `<div class="mst ${st.cls}" id="mbanner" title="Back to Claude"><b>${miniTick++ % 2 ? '●' : '○'} ${esc(st.head)}</b><span>${esc(st.sub)}</span></div>`
+}
+// the "ago" counter keeps ticking even when no data arrives: a frozen window cannot do that
+if (MINI) setInterval(renderMini, 1000)
+document.getElementById('mini').onclick = e => { if (e.target.closest('#mbanner')) backToClaude() }
+
+let miniNet = null
+/** ?mini canvas: the style's sphere, a dot per agent round it, and a tape of the last 2 minutes of actions sliding left. */
+function drawMini(now) {
+  const rows = agentRows(), t = motionT(now), tapeH = 30, topH = 58
+  const cx = W / 2, cy = topH + (H - topH - tapeH - 8) / 2
+  const R = Math.max(24, Math.min(W * 0.16, (H - topH - tapeH - 16) / 2.9))
+  g.fillStyle = 'rgba(5,5,10,.6)'; g.fillRect(0, 0, W, H)
+  const recent = rows.reduce((s, r) => s + (r.a.steps || []).filter(x => now - x.at < 30000).length, 0)
+  const top = rows.filter(r => r.a.status === 'working').sort((x, y) => lastAct(y.a) - lastAct(x.a))[0], kind = top ? currentKind(top.a, now) : null
+  miniNet ||= makeNet(1)
+  const P = (u, v) => [cx + u * R, cy + v * R]
+  const cc = { cx, cy, R, now, t, kind, fire: kind === 'error' ? C.red : KIND[kind] || C.cyan, steps: [], cur: -1, goal: { x: cx, y: cy }, complete: false, flare: 0, recent, low: true, jitter: false, tip: null, net: miniNet, P }
+  g.save()
+  try { if (!(theme && theme.sphere)) throw 0; theme.sphere(g, cc) } catch {
+    g.restore(); g.save()
+    const mt = t * 1000; g.strokeStyle = C.shell; g.lineWidth = 1.2; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke()
+    g.strokeStyle = C.wire; for (let i = 0; i < 4; i++) { g.beginPath(); g.ellipse(cx, cy, Math.max(0.5, R * Math.abs(Math.cos(mt / 9000 + i * Math.PI / 4))), R, 0, 0, Math.PI * 2); g.stroke() }
+  }
+  g.restore()
+  // a dot per agent on an orbit; it flares at each new action, hollows amber when it has gone quiet, and takes the alert's shape
+  const n = Math.min(rows.length, 18), rx = Math.min(R * 2.5, W / 2 - 24), ry = Math.min(R * 1.55, (H - topH - tapeH) / 2 - 8)
+  rows.slice(0, n).forEach((r, i) => {
+    const ang = -Math.PI / 2 + i / n * Math.PI * 2 + t * 0.06, x = cx + Math.cos(ang) * rx, y = cy + Math.sin(ang) * ry
+    const working = r.a.status === 'working', age = now - lastAct(r.a), slow = working && age > SLOW, flash = working ? Math.max(0, 1 - age / 1500) : 0
+    const col = r.att ? r.att.color : slow ? C.amber : working ? C.cyan : C.green, rad = 5 + flash * 5
+    if (flash) { g.globalAlpha = flash * 0.5; g.fillStyle = col; g.beginPath(); g.arc(x, y, rad + 7, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1 }
+    g.fillStyle = col; g.strokeStyle = col; g.lineWidth = 2; g.globalAlpha = working || r.att ? 1 : 0.55
+    g.beginPath()
+    if (r.att && r.att.kind === 'wait') { g.moveTo(x, y - rad - 2); g.lineTo(x + rad + 2, y); g.lineTo(x, y + rad + 2); g.lineTo(x - rad - 2, y); g.closePath(); g.fill() }
+    else if (r.att) { g.moveTo(x, y - rad - 1); g.lineTo(x + rad + 1, y + rad); g.lineTo(x - rad - 1, y + rad); g.closePath(); g.fill() }
+    else if (slow) { g.arc(x, y, rad, 0, Math.PI * 2); g.stroke() }
+    else { g.arc(x, y, working ? rad : 3.5, 0, Math.PI * 2); g.fill() }
+    g.globalAlpha = 1
+  })
+  // the tape: every action of the last 2 minutes as a tick, sliding left; a stall is a gap that keeps growing
+  const x0 = 10, x1 = W - 10, ty = H - tapeH + 4, SPAN = 120000
+  g.strokeStyle = C.line; g.lineWidth = 1; g.beginPath(); g.moveTo(x0, ty + 22); g.lineTo(x1, ty + 22); g.stroke()
+  for (const r of rows) for (const s of r.a.steps || []) {
+    const age = now - s.at; if (age < 0 || age > SPAN) continue
+    g.fillStyle = s.isError ? C.red : KIND[s.kind] || C.dim; g.globalAlpha = 1 - age / SPAN * 0.6
+    g.fillRect(x1 - age / SPAN * (x1 - x0), ty + (s.isError ? 2 : 6), 2, s.isError ? 20 : 16)
+  }
+  g.globalAlpha = 1
+}
+
+const tipEl = document.getElementById('tip')
+function showTip(e) {
+  const n = hoverId && nodes.get(hoverId)
+  if (!n || hoverId === briefId || saverSince) { tipEl.style.display = 'none'; return }
+  const a = n.a, att = attention(a, Date.now())
+  tipEl.innerHTML = `<b>${esc(a.label)}</b>${att ? `<div class="ta">${ATT_ICON[att.kind]} ${esc(att.text)}</div>` : ''}` + (a.updates || []).slice(-3).reverse().map(u => `<div class="t-${u.tone}">${esc(cut(u.text, 70))}</div>`).join('')
+  tipEl.style.display = 'block'; tipEl.style.left = Math.min(e.clientX + 16, innerWidth - 300) + 'px'; tipEl.style.top = Math.min(e.clientY + 16, innerHeight - 140) + 'px'
+}
+cv.tabIndex = 0; cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', 'Agent web. Use the agent list, or arrow keys here, to pick an agent.')
+cv.addEventListener('keydown', e => {
+  const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key]
+  if (step) { e.preventDefault(); const ids = agentRows().map(r => r.a.id); if (ids.length) selectAgent(ids[(Math.max(0, ids.indexOf(focusId)) + step + ids.length) % ids.length]) }
+  else if (e.key === 'Enter' && focusId) openBrief(focusId)
+})
+cv.addEventListener('mouseleave', () => { hoverId = null; tipEl.style.display = 'none' })
+cv.addEventListener('mousemove', e => { hoverId = hit(e.clientX, e.clientY); cv.style.cursor = hoverId ? 'pointer' : 'default'; showTip(e) })
+cv.addEventListener('click', e => {
+  const id = hit(e.clientX, e.clientY)
+  if (!id) return closeBrief()
+  if (layout.mission) return togglePanel()   // the core: clicking the sphere opens or closes its sidebar
+  selectAgent(id)
+})
+const fullscreen = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen().catch(() => {})
+const togglePanel = () => { document.getElementById('panel').classList.toggle('hidden'); layout(); renderPanel() }
+function syncSideTab() { document.getElementById('sideTab').style.display = panelOpen() ? 'none' : '' }
+document.getElementById('sideTab').onclick = togglePanel
+document.getElementById('fsBtn').onclick = fullscreen
+document.getElementById('panelBtn').onclick = togglePanel
+document.getElementById('viewBtn').onclick = cycleView
+document.getElementById('viewBtn').textContent = 'View: ' + cap(viewMode)
+addEventListener('keydown', e => {
+  // Tab only toggles the panel when nothing has focus, so keyboard users can still move focus
+  if (e.key === 'Tab' && document.activeElement === document.body) { e.preventDefault(); togglePanel() }
+  if (e.key === 'Escape') { if (!document.getElementById('guide').hidden) showTab('live'); else if (briefId) closeBrief(); else { focusId = layout.root; renderPanel() } }
+  // letters are left alone with a modifier (browser shortcuts) or while typing in a field
+  if (e.metaKey || e.ctrlKey || e.altKey || (e.target.closest && e.target.closest('select, input, textarea'))) return
+  if (e.key === 'f' || e.key === 'F') fullscreen()
+  if (e.key === 'l' || e.key === 'L') toggleLog()
+  if (e.key === 'v' || e.key === 'V') cycleView()
+  if (e.key === 's' || e.key === 'S') togglePv()
+  if (e.key === 'r' || e.key === 'R') replaying ? closeReplay() : openReplay()
+  if (e.key === 'c' || e.key === 'C') backToClaude()
+  if (e.key === 'z' || e.key === 'Z') { lastInput = Date.now(); setSaver(!saverSince) }   // wake() skips Z, so mark the input here
+  if (e.key === 'g' || e.key === 'G') showTab(document.getElementById('guide').hidden ? 'guide' : 'live')
+  if (e.key === ']') stepTheme(1)
+  if (e.key === '[') stepTheme(-1)
+  if (e.key === 'n' || e.key === 'N') jumpAttention()
+  if (e.key === 'a' || e.key === 'A') toggleRail()
+  if (e.key === '/' && railWidth()) { e.preventDefault(); railQ.focus() }
+})
+addEventListener('resize', () => { resize(); layout() })
+
+// ---------- feed: the mod's state file, or a demo ----------
+const uplink = document.getElementById('uplink'), uplinkText = uplink.querySelector('span')
+let lastAgents = ''
+async function poll() {
+  try {
+    const r = await fetch('state.json?t=' + Date.now(), { cache: 'no-store' })
+    if (r.ok) { const txt = await r.text(); lastOk = Date.now(); if (txt !== lastAgents) { const s = JSON.parse(txt); lastAgents = txt; ingest(s) } }
+  } catch {}
+  const lost = Date.now() - lastOk > 4000
+  uplink.className = 'uplink' + (lost ? ' lost' : ''); uplinkText.textContent = replaying ? 'Replay' : lost ? 'Disconnected' : 'Live'
+}
+
+/** ?demo: a made-up team, for trying the look without a session. */
+function demo() {
+  const tools = [['Edit', 'edit'], ['Read', 'read'], ['Grep', 'search'], ['Bash', 'run'], ['WebFetch', 'browse'], ['Write', 'edit'], ['Agent', 'agent']]
+  const names = ['review:auth', 'fix:retro', 'build:api', 'scan:deps', 'fix:terminal', 'integrate', 'qa:mobile', 'design:hud']
+  const files = ['src/auth.ts', 'api/routes.ts', 'ui/Hud.tsx', 'DECISIONS.md', 'package.json']
+  const code = ['export function renderPanel(agent) {', '  const plan = agent.plan ?? []', '  if (!plan.length) return empty()', '  return plan.map(step => row(step))', '}', 'const view = await loadState(port)']
+  const briefs = ['Review the auth middleware for token-expiry bugs and list every place a stale session could slip through. Report file:line for each.',
+    'Fix the retro screen so the score resets between rounds. Keep the change small and add one test.',
+    'Build the /api/routes endpoints from the spec in DECISIONS.md, then run the test suite.',
+    'Scan package.json for outdated or vulnerable dependencies and suggest safe upgrades.']
+  const mk = (id, label, parentId) => ({ id, label, status: 'working', parentId, task: parentId ? briefs[label.length % briefs.length] : 'Make the Agent Web log a small draggable box and show each agent\'s task when clicked.', model: 'claude-opus-5-5', startedAt: Date.now(), linesChanged: 0, costUsd: 0, calls: 0, errors: 0, turns: 1, toolMix: {}, steps: [], updates: [], files: [],
+    screen: { kind: 'file', title: files[0], focus: 2, lines: code.map((x, i) => ({ no: i + 1, mark: ' ', text: x })) } })
+  const plans = { main: ['Read the Agent Web page code', 'Record each agent\'s goal and plan from its to-do calls', 'Show the goal and plan in the task card', 'Draw the neural core for a single agent', 'Run the tests and validate the mod', 'Check it in demo mode'],
+    helper: ['Map the files involved', 'Make the change', 'Run the tests and report back'] }
+  const withPlan = a => { a.goal = a.task.split(/(?<=[.!?])\s/)[0]; a.plan = (a.parentId ? plans.helper : plans.main).map((text, i) => ({ text, status: i ? 'pending' : 'in_progress' })); return a }
+  const solo = new URLSearchParams(location.search).get('demo') === 'solo'
+  const s = { agents: [withPlan(mk('main', 'Main agent'))], series: [], sites: [] }
+  const blocks = ['<header><h1>Demo site</h1><p>A page an agent is writing.</p></header>', '<section><h2>Watchlist</h2><ul><li>Item one</li><li>Item two</li></ul></section>', '<section><h2>Notes</h2><p>Draft summary goes here.</p></section>', '<footer>Research only.</footer>']
+  const page = n => 'data:text/html,' + encodeURIComponent('<!doctype html><meta charset=utf-8><style>body{font:15px system-ui;margin:24px;color:#111}h1{margin:0 0 4px}section{margin-top:18px;padding:12px;border:1px solid #ddd;border-radius:8px}</style>' + blocks.slice(0, n).join(''))
+  let built = 1
+  let k = 0, id = 0
+  const fx = (a, kind, size = 0, label = '') => { a.fx = { id: 'f' + ++id, kind, size, at: Date.now(), label } }
+  setInterval(() => {
+    k++
+    // plans move on: the step in progress clears and the next one starts
+    if (k % 6 === 0) for (const p of s.agents.filter(x => x.status === 'working')) {
+      const i = p.plan.findIndex(x => x.status === 'in_progress')
+      if (i < 0) { if (p.plan.every(x => x.status === 'completed') && k % 60 === 0) p.plan.forEach((x, j) => x.status = j ? 'pending' : 'in_progress'); continue }
+      if (Math.random() < .6) { p.plan[i].status = 'completed'; if (p.plan[i + 1]) p.plan[i + 1].status = 'in_progress' }
+    }
+    if (!solo && s.agents.length < 9 && k % 5 === 1) {
+      const parent = s.agents.length > 5 && Math.random() < .4 ? s.agents[1 + (Math.random() * 3 | 0)].id : 'main'
+      const a = withPlan(mk('w' + k, names[(s.agents.length - 1) % names.length], parent)); fx(a, 'spawn')
+      a.updates.push({ at: Date.now(), text: 'Started: ' + a.label, tone: 'info' }); s.agents.push(a)
+    }
+    for (const x of s.agents) if (x.waiting && Date.now() - x.waiting.since > 6000) delete x.waiting
+    if (k % 25 === 12) { const w = s.agents.find(x => x.id !== 'main' && x.status === 'working' && !x.waiting); if (w) w.waiting = { since: Date.now(), tool: 'Bash' } }
+    const a = s.agents[Math.random() * s.agents.length | 0]
+    if (a.status === 'done' || a.waiting) { lastOk = Date.now(); ingest(JSON.parse(JSON.stringify(s))); return }
+    const [tool, kind] = tools[Math.random() * tools.length | 0], f = files[Math.random() * files.length | 0]
+    a.calls++; a.toolMix[tool] = (a.toolMix[tool] || 0) + 1; a.costUsd += Math.random() * .05
+    const isError = Math.random() < .06
+    a.steps.push({ at: Date.now(), endAt: Date.now() + 400, tool, kind, target: f, isDone: true, isError }); a.steps = a.steps.slice(-14)
+    let u
+    if (isError) { a.errors++; fx(a, 'error'); u = { text: `${tool} didn't work`, tone: 'error' } }
+    else if (kind === 'edit') {
+      const add = 1 + (Math.random() * 12 | 0), del = Math.random() < .3 ? 1 + (Math.random() * 6 | 0) : 0
+      a.linesChanged += add + del; fx(a, del > add ? 'cut' : 'add', del > add ? del : add)
+      a.screen.lines = a.screen.lines.map((l, i) => ({ ...l, mark: i === 2 ? (del > add ? '-' : '+') : ' ' })); a.screen.title = f
+      u = { text: del ? `Changed ${f.split('/').pop()} (+${add} −${del})` : `Added ${add} lines to ${f.split('/').pop()}`, tone: del > add ? 'cut' : 'add' }
+    } else if (kind === 'run' && Math.random() < .4) {
+      const pass = Math.random() < .7; fx(a, pass ? 'pass' : 'fail', 0, pass ? '12 passed' : '2 failed')
+      u = { text: `Ran the tests: ${a.fx.label}`, tone: pass ? 'pass' : 'fail' }
+    } else u = { text: { read: `Read ${f.split('/').pop()}`, search: 'Searched the code for "renderPanel"', run: 'Ran npm run build', browse: 'Read a page on docs.dev', agent: 'Handed "audit" to a helper' }[kind] || 'Used ' + tool, tone: 'info' }
+    a.updates.push({ at: Date.now(), ...u }); a.updates = a.updates.slice(-10)
+    if (a.id !== 'main' && a.calls > 14 && Math.random() < .1) { a.status = 'done'; fx(a, 'done'); a.updates.push({ at: Date.now() + 1, text: 'Finished its task', tone: 'pass' }) }
+    if (k % 10 === 0) built = built % blocks.length + 1
+    s.preview = { kind: 'server', url: page(built), title: 'demo/index.html', agent: 'Main agent', rev: built }
+    lastOk = Date.now(); ingest(JSON.parse(JSON.stringify(s)))
+  }, 600)
+  uplinkText.textContent = 'Demo'
+}
+
+if (new URLSearchParams(location.search).has('demo')) demo()
+else { const loop = async () => { await poll(); setTimeout(loop, document.hasFocus() ? 400 : 1200) }; loop() }
+registerTheme({ id: 'neon', name: 'Neon', backdrop: neonBackdrop })
+if (!theme) applyTheme('neon', true)
+// ?saver opens in screensaver mode; ?selftest times the drawing and reports errors into the page (for checking a style headless)
+const QS = new URLSearchParams(location.search)
+if (QS.has('saver')) setTimeout(() => setSaver(true), 400)
+if (QS.has('selftest')) setTimeout(() => {
+  const res = { theme: theme && theme.id, view: layout.mission ? 'core' : 'web', errors: [] }
+  const time = (fn, n) => { const t0 = performance.now(); for (let i = 0; i < n; i++) { try { fn(i) } catch (e) { res.errors.push(String((e && e.stack) || e).slice(0, 400)); break } } return +((performance.now() - t0) / n).toFixed(2) }
+  res.backdropMs = time(i => drawBackdrop(Date.now() + i * 997), 60)
+  res.frameMs = time(() => { lastDraw = 0; frame() }, 40)
+  setSaver(true); res.saverFrameMs = time(() => { lastDraw = 0; frame() }, 20); setSaver(false)
+  const pre = document.createElement('pre'); pre.id = 'selftest'; pre.textContent = JSON.stringify(res); document.body.appendChild(pre)
+}, +(QS.get('selftest') || 6000))
+renderHud(); renderLog(); requestAnimationFrame(frame)
+</script>
+<script src="themes/starry.js"></script>
+<script src="themes/iridescent.js"></script>
+<script src="themes/living.js"></script>
+<script src="themes/deadchannel.js"></script>
+<script src="themes/focus.js"></script>
+<script src="themes/ocean.js"></script>
+<script src="themes/aurora.js"></script>
+<script src="themes/blueprint.js"></script>
+<script src="themes/orrery.js"></script>
+<script src="themes/skybloom.js"></script>
+<script src="themes/sage.js"></script>
+<script src="themes/blobtrack.js"></script>
+<script src="themes/hologram.js"></script>
+</body>
+</html>

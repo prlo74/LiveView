@@ -1,0 +1,5 @@
+{
+  "name": "liveview",
+  "owner": { "name": "prlo74" },
+  "plugins": [{ "name": "live-view", "source": "./live-view", "description": "LiveView: a live window onto every agent in a Claude Code session." }]
+}

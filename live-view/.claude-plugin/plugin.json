@@ -1,0 +1,14 @@
+{
+  "name": "live-view",
+  "version": "0.1.0",
+  "description": "Live pane showing what every agent in this session is doing: files edited, pages browsed, current tool.",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "sounds": {
+      "type": "boolean",
+      "title": "Sounds",
+      "description": "Tick on edits, chime when tests pass or an agent finishes, buzz on failures.",
+      "default": false
+    }
+  }
+}

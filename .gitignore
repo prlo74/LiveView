@@ -1,0 +1,7 @@
+.DS_Store
+node_modules
+.claude-plugin/types
+# internal notes and retired styles
+CLAUDE.md
+council-*.md
+cut-styles/
