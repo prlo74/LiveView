@@ -65,3 +65,7 @@ cd live-view/web && python3 -m http.server 8765
 ## Status
 
 Early (v0.1.0). Issues and pull requests welcome.
+
+## License
+
+[MIT](LICENSE)
