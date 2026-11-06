@@ -35,7 +35,7 @@ async function pythonArgv($: EngineInterface): Promise<string[]> {
 
 // Serves one folder on this machine only (127.0.0.1), never cached, quietly.
 const SERVER = `
-import http.server, functools, sys, urllib.parse, subprocess, os
+import http.server, functools, sys, urllib.parse, subprocess, os, json, threading, time
 class H(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
     def end_headers(self):
@@ -69,15 +69,50 @@ class H(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if not self.ok(): return
         if self.path == '/focus-claude' and self.headers.get('X-Agent-Web') == '1':
-            if sys.platform == 'darwin': subprocess.Popen(['open', '-a', 'Claude'])
+            # elsewhere the page falls back to the claude:// link, so say this did nothing
+            if sys.platform != 'darwin':
+                self.send_error(501)
+                return
+            subprocess.Popen(['open', '-a', 'Claude'])
             self.send_response(204)
+            self.end_headers()
+        # A message typed in the page: handed to the mod as one stdout line, which sends it to Claude.
+        elif self.path == '/ask' and self.headers.get('X-Agent-Web') == '1' and self.same_origin():
+            try:
+                n = int(self.headers.get('Content-Length') or 0)
+                body = json.loads(self.rfile.read(n)) if 0 < n <= 20000 else None
+                text = body.get('text', '').strip() if isinstance(body, dict) and isinstance(body.get('text'), str) else ''
+                mode = body.get('mode') if isinstance(body, dict) and body.get('mode') in ('send', 'draft') else 'send'
+            except (ValueError, UnicodeDecodeError):
+                text = ''
+            if not text or len(text) > 4000:
+                self.send_error(400)
+                return
+            print('ASK ' + json.dumps({'text': text, 'mode': mode}), flush=True)
+            self.send_response(202)
+            self.end_headers()
+        # The page's Mini button: the mod opens the small always-on-top monitor.
+        elif self.path == '/open-mini' and self.headers.get('X-Agent-Web') == '1' and self.same_origin():
+            print('MINI', flush=True)
+            self.send_response(202)
             self.end_headers()
         else:
             self.send_error(403)
+    # A browser sends Origin on POST; anything but this page's own is refused.
+    def same_origin(self):
+        origin = self.headers.get('Origin')
+        port = self.server.server_address[1]
+        return origin is None or origin in ('http://127.0.0.1:%d' % port, 'http://localhost:%d' % port)
     def list_directory(self, path):
         self.send_error(404)
         return None
 handler = functools.partial(H, directory=sys.argv[1])
+# Claude gone: the server goes too, so no window keeps showing a dead session's last state
+def watch_parent(ppid):
+    while True:
+        time.sleep(2)
+        if os.getppid() != ppid: os._exit(0)
+if sys.platform != 'win32': threading.Thread(target=watch_parent, args=(os.getppid(),), daemon=True).start()
 try:
     s = http.server.ThreadingHTTPServer(('127.0.0.1', ${WEB_PORT}), handler)
 except OSError:
@@ -86,10 +121,15 @@ print(s.server_address[1], flush=True)
 s.serve_forever()
 `
 
+/** Finished helpers sent to the page in full; older ones are trimmed to their node. */
+export const KEEP_DONE = 20
 const cut = (t: string, n: number) => (t.length > n ? `${t.slice(0, n - 1)}…` : t)
 
 /** What the page reads: each agent trimmed to what the web draws, plus the session's totals. */
 export function webSnapshot(agents: Record<string, AgentView>, sites: Record<string, Site>, series: Bucket[], now: number) {
+  // finished helpers past the newest 20 keep only what their node shows, so long sessions stay small
+  const done = Object.values(agents).filter(a => a.status === 'done' && a.parentId).sort((x, y) => lastAt(y) - lastAt(x))
+  const slim = new Set(done.slice(KEEP_DONE).map(a => a.id))
   return {
     now,
     series: series.slice(-30).map(b => ({ t: b.t, calls: b.calls, errors: b.errors, lines: b.lines })),
@@ -112,9 +152,9 @@ export function webSnapshot(agents: Record<string, AgentView>, sites: Record<str
       waiting: a.waiting,
       attention: attentionOf(a, now) ?? null,
       goal: goalText(a.task),
-      plan: a.plan?.slice(0, 24).map(s => ({ text: cut(s.text, 90), status: s.status })),
+      plan: slim.has(a.id) ? undefined : a.plan?.slice(0, 24).map(s => ({ text: cut(s.text, 90), status: s.status })),
       fx: a.fx,
-      steps: a.steps.slice(-14).map(s => ({
+      steps: a.steps.slice(slim.has(a.id) ? -1 : -14).map(s => ({
         at: s.at,
         endAt: s.endAt,
         tool: s.tool,
@@ -124,9 +164,9 @@ export function webSnapshot(agents: Record<string, AgentView>, sites: Record<str
         isError: s.isError,
         isDenied: s.isDenied,
       })),
-      updates: a.updates.slice(-10),
-      files: a.files.slice(-8),
-      screen: a.screen && {
+      updates: a.updates.slice(slim.has(a.id) ? -1 : -10),
+      files: slim.has(a.id) ? [] : a.files.slice(-8),
+      screen: !slim.has(a.id) && a.screen && {
         kind: a.screen.kind,
         title: a.screen.title,
         focus: Math.min(a.screen.focus, 12),
@@ -139,7 +179,7 @@ export function webSnapshot(agents: Record<string, AgentView>, sites: Record<str
 // Module state: a reload kills the server with the module, and the next start binds the same port again.
 let dir: string | undefined
 let url: string | undefined
-let lastJson = ''
+let lastJson = '', lastWriteAt = 0, sid = ''
 let starting: Promise<string | undefined> | undefined
 
 /** Starts the local server once and resolves its address; undefined when python3 is missing. */
@@ -152,15 +192,24 @@ export function startWeb($: EngineInterface): Promise<string | undefined> {
     if (await isWindows($)) await $.process.run(['robocopy', `${$.plugin.root}\\web`, dir, '/E', '/NFL', '/NDL', '/NJH', '/NJS'])
     else await $.process.run(['cp', '-R', `${$.plugin.root}/web/.`, dir])
     lastJson = ''
+    sid = await $.session.id().catch(() => '')
     const child = $.process.spawn({ argv: [...(await pythonArgv($)), '-I', '-c', SERVER, dir] })
     return new Promise<string | undefined>(resolve => {
       void (async () => {
         try {
+          let buf = ''
           for await (const { stream, text } of child) {
-            const port = stream === 'stdout' && !url ? /(\d+)/.exec(text)?.[1] : undefined
-            if (port) {
-              url = `http://127.0.0.1:${port}/`
-              resolve(url)
+            if (stream !== 'stdout') continue
+            const lines = (buf + text).split('\n')
+            buf = lines.pop() ?? ''
+            for (const line of lines) {
+              if (line.startsWith('ASK ')) { void deliverAsk($, line.slice(4)); continue }
+              if (line.trim() === 'MINI') { if (url) void openMiniWindow($, url).catch(() => undefined); continue }
+              const port = !url ? /^(\d+)$/.exec(line.trim())?.[1] : undefined
+              if (port) {
+                url = `http://127.0.0.1:${port}/`
+                resolve(url)
+              }
             }
           }
         } catch {
@@ -173,6 +222,31 @@ export function startWeb($: EngineInterface): Promise<string | undefined> {
     })
   })()
   return starting
+}
+
+/** A message typed in the Agent Web, and what became of it (the page shows the last few). */
+export type Ask = { id: number; text: string; status: 'queued' | 'sent' | 'drafted' | 'refused' }
+let asks: Ask[] = [], askSeq = 0
+const setAsk = (id: number, status: Ask['status']) => { asks = asks.map(a => (a.id === id ? { ...a, status } : a)) }
+
+/** Sends a message from the page to Claude: as a prompt (a turn once Claude is free), or into the prompt box as a draft.
+ *  Framed as this plugin's message, not the person's own words: any program on this machine can reach /ask, not only the page. */
+export async function deliverAsk($: EngineInterface, line: string) {
+  let msg: { text?: unknown; mode?: unknown }
+  try { msg = JSON.parse(line) } catch { return }
+  if (typeof msg.text !== 'string' || !msg.text.trim()) return
+  const text = msg.text.slice(0, 4000)
+  const ask: Ask = { id: ++askSeq, text: cut(text.replace(/\s+/g, ' '), 80), status: 'queued' }
+  asks = [...asks, ask].slice(-5)
+  if (msg.mode === 'draft') {
+    // append: never wipes what the person already typed in the box; on its own line after it
+    const box = await $.prompt.read()
+    const r = await $.prompt.fill({ text: box.text.trim() ? `\n${text}` : text, mode: 'append' })
+    setAsk(ask.id, r.isFilled ? 'drafted' : 'refused')
+    return
+  }
+  const r = await $.prompt.submit({ text })
+  setAsk(ask.id, 'drop' in r && r.drop ? 'refused' : 'sent')
 }
 
 const lastAt = (a: AgentView) => a.steps[a.steps.length - 1]?.at ?? a.startedAt
@@ -250,43 +324,75 @@ export async function sitePreview($: EngineInterface, agents: Record<string, Age
 }
 
 /** Rewrites state.json when anything changed. A no-op until the server runs. */
-export async function writeWebState($: EngineInterface, snap: ReturnType<typeof webSnapshot> & { preview?: unknown; servers?: unknown }) {
+export async function writeWebState($: EngineInterface, snap: ReturnType<typeof webSnapshot> & { preview?: unknown; servers?: unknown; pairings?: unknown }) {
   if (!dir || !url) return
   const { now: _now, ...rest } = snap
-  const body = JSON.stringify(rest)
-  if (body === lastJson) return
+  const body = JSON.stringify({ ...rest, asks })
+  // unchanged state is still rewritten every 2s: the page reads a file that stops changing as Claude gone
+  if (body === lastJson && snap.now - lastWriteAt < 2000) return
   lastJson = body
-  await $.fs.write(`${dir}/state.json`, JSON.stringify(snap))
+  lastWriteAt = snap.now
+  await $.fs.write(`${dir}/state.json`, JSON.stringify({ ...snap, sid, asks }))
 }
 
+/** The mini's Info.plist: a menu-bar-only app (no Dock icon) with a stable id for its notification setting. */
+const miniPlist = (exe: string) => `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>dev.liveview.agentweb-mini</string>
+<key>CFBundleName</key><string>LiveView monitor</string>
+<key>CFBundleExecutable</key><string>${exe}</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>1.0</string>
+<key>LSUIElement</key><true/>
+</dict></plist>
+`
+
+/** How the mini monitor opened, or why the native window could not. */
+export type MiniHow = 'native' | 'chrome' | 'browser' | 'no-tools' | 'build-failed'
+
 /**
- * Opens the small monitor (?mini): a native always-on-top window (built once with swiftc, cached under ~/Library/Caches),
- * else a small Chrome app window, which cannot stay on top.
+ * Opens the small monitor (?mini): a native always-on-top window (built with swiftc, cached under ~/Library/Caches
+ * by a hash of its source), else a small Chrome app window, which cannot stay on top, else the default browser.
+ * Only this session's mini is replaced; other sessions keep theirs.
  */
-export async function openMiniWindow($: EngineInterface, address: string): Promise<'native' | 'chrome'> {
+export async function openMiniWindow($: EngineInterface, address: string): Promise<MiniHow> {
   const mini = `${address}?mini`
-  if (await isWindows($)) {
-    await openAppWindowWindows($, mini)
-    return 'chrome'
-  }
+  if (await isWindows($)) return (await openAppWindowWindows($, mini, '480,270')) ? 'chrome' : 'browser'
   const home = (await $.env.get('HOME')) ?? ''
-  const dir = `${home}/Library/Caches/agentweb-mini`, bin = `${dir}/agentweb-mini`, src = `${$.plugin.root}/mini/MiniWindow.swift`
+  let why: MiniHow | undefined
   if (home) {
-    // rebuilt only when the source is newer than the binary
-    const fresh = (await $.process.run(['test', bin, '-nt', src])).exitCode === 0
-    if (!fresh) {
-      await $.process.run(['mkdir', '-p', dir])
-      await $.process.run(['swiftc', '-O', src, '-o', bin], { timeoutMs: 120_000 })
+    const dir = `${home}/Library/Caches/agentweb-mini`, src = `${$.plugin.root}/mini/MiniWindow.swift`
+    const hash = (await $.process.run(['shasum', '-a', '256', src])).stdout.slice(0, 10)
+    // a small .app round the binary: macOS allows notifications only from a bundle
+    const app = `${dir}/AgentWebMini-${hash}.app`, bin = `${app}/Contents/MacOS/agentweb-mini-${hash}`
+    if ((await $.process.run(['test', '-x', bin])).exitCode !== 0) {
+      // without the Command Line Tools /usr/bin/swiftc only pops up the install dialog
+      if ((await $.process.run(['xcode-select', '-p'])).exitCode !== 0) why = 'no-tools'
+      else {
+        await $.process.run(['mkdir', '-p', `${app}/Contents/MacOS`])
+        await $.fs.write(`${app}/Contents/Info.plist`, miniPlist(`agentweb-mini-${hash}`))
+        // built under a temp name, then moved: two sessions building at once never run a half-written file
+        const tmp = `${bin}.${await $.clock.now()}`
+        const built = await $.process.run(['swiftc', '-O', src, '-o', tmp], { timeoutMs: 120_000 })
+        if (built.exitCode === 0) {
+          await $.process.run(['mv', '-f', tmp, bin])
+          // ad-hoc signed, so macOS knows the bundle again on the next launch and keeps its notification setting
+          await $.process.run(['codesign', '--force', '-s', '-', app])
+        } else why = 'build-failed'
+      }
     }
-    if ((await $.process.run(['test', '-x', bin])).exitCode === 0) {
-      await $.process.run(['pkill', '-x', 'agentweb-mini'])
-      // detached, so it outlives this call
-      await $.process.run(['sh', '-c', 'nohup "$0" "$1" >/dev/null 2>&1 &', bin, mini])
-      return 'native'
+    if (!why && (await $.process.run(['test', '-x', bin])).exitCode === 0) {
+      const port = new URL(address).port
+      await $.process.run(['pkill', '-f', `agentweb-mini[^ ]* http://127\\.0\\.0\\.1:${port}/`])
+      // through Launch Services, so it runs as an app (menu bar item, notifications) and outlives this call
+      if ((await $.process.run(['open', '-n', app, '--args', mini])).exitCode === 0) return 'native'
     }
   }
-  await $.process.run(['open', '-na', 'Google Chrome', '--args', `--app=${mini}`, '--window-size=480,270', '--new-window'])
-  return 'chrome'
+  const app = await $.process.run(['open', '-na', 'Google Chrome', '--args', `--app=${mini}`, '--window-size=480,270', '--new-window'])
+  if (app.exitCode === 0) return why ?? 'chrome'
+  await $.process.run(['open', mini])
+  return why ?? 'browser'
 }
 
 /** Opens the page in a window of its own: a Chrome app window when Chrome is there, else the default browser. */
@@ -302,8 +408,8 @@ export async function openWebWindow($: EngineInterface, address: string): Promis
  * Windows: an Edge app window (Edge ships with Windows), else the default browser. `start` returns at once, as
  * `open` does on macOS. The address has no spaces or `&`, so cmd passes it through unquoted.
  */
-async function openAppWindowWindows($: EngineInterface, address: string): Promise<boolean> {
-  const app = await $.process.run(['cmd', '/c', 'start', 'msedge', `--app=${address}`, '--new-window']).catch(() => undefined)
+async function openAppWindowWindows($: EngineInterface, address: string, size?: string): Promise<boolean> {
+  const app = await $.process.run(['cmd', '/c', 'start', 'msedge', `--app=${address}`, '--new-window', ...(size ? [`--window-size=${size}`] : [])]).catch(() => undefined)
   if (app?.exitCode === 0) return true
   await $.process.run(['explorer', address]).catch(() => undefined)
   return false

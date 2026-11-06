@@ -29,6 +29,7 @@ test('a dev server is found, snapshotted after an edit and shown in the tile; th
   on('command.register', (_, e) => ({ value: { command: e.name } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('env.get', () => ({ value: undefined }))
   on('fs.read', (_, e) => ({ value: e.as === 'bytes' ? { base64: 'QUJD' } : 'one\ntwo\nb\nc' }))
   on('process.run', (_, e) => {
     runs.push(e.argv[0]!)

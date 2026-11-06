@@ -28,9 +28,16 @@
   .frame::before { content: ''; position: absolute; left: 0; top: 0; width: 40px; height: 2px; background: var(--yellow); }
   header.frame { top: 12px; left: 12px; right: 12px; height: 58px; display: flex; align-items: center; gap: 22px; padding: 0 18px; }
   /* narrower windows: tighter header so the last buttons stay on screen with wide style fonts */
-  @media (max-width: 1500px) { header.frame { gap: 10px; padding: 0 12px; } header.frame .cy, header.frame #styleSel { padding-left: 8px; padding-right: 8px; letter-spacing: 0; } }
+  @media (max-width: 2100px) { header.frame { gap: 10px; padding: 0 12px; } header.frame .cy, header.frame #styleSel { padding-left: 8px; padding-right: 8px; letter-spacing: 0; } }
   .brand { font-family: var(--head); font-weight: 700; font-size: 22px; letter-spacing: 1px; color: var(--text); white-space: nowrap; }
   .kpis { display: flex; gap: 18px; flex: 1; overflow: hidden; }
+  /* the header holds a dozen controls: narrower windows drop the brand (the window title says it) and the least useful figures first.
+     Cost, errors and "need attention" always stay. */
+  @media (max-width: 2100px) { .kpis { gap: 10px; } .kpi { min-width: 48px; } .brand { display: none; } header.frame #styleSel { max-width: 130px; } }
+  @media (max-width: 1500px) { .kpi[data-k="Agents"], .kpi[data-k="Done"], .kpi[data-k="Lines"] { display: none; } }
+  @media (max-width: 1350px) { .kpi[data-k="Actions"], .kpi[data-k="Working"] { display: none; } header.frame .tabs { display: none; } }   /* G still opens the guide */
+  .pairs { font-size: 11px; color: var(--green); padding: 0 0 4px; }
+  .pairs:empty { display: none; }
   .kpi { display: flex; flex-direction: column; min-width: 64px; }
   .kpi b { font-family: var(--head); font-size: 22px; color: var(--cyan); line-height: 1; font-variant-numeric: lining-nums tabular-nums; }
   .kpi span { font-size: 10px; letter-spacing: 1px; color: var(--dim); }
@@ -101,6 +108,16 @@
   footer .row.new { animation: in .4s ease-out; }
   footer .row b { color: var(--yellow); font-weight: normal; }
   @keyframes in { from { opacity: 0; transform: translateX(-12px); color: #fff; } }
+  /* message box: type to Claude from here */
+  .ask { left: 50%; transform: translateX(-50%); bottom: 12px; width: min(600px, calc(100vw - 760px)); min-width: 300px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding: 8px 10px; z-index: 13; clip-path: none; margin: 0; }
+  .ask textarea { flex: 1; min-width: 0; min-height: 34px; max-height: 120px; resize: none; box-sizing: border-box; font: 13px/1.4 var(--mono); color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); padding: 7px 9px; }
+  .ask textarea:focus-visible { outline: 2px solid var(--cyan); outline-offset: 0; }
+  .ask button { min-height: 34px; }
+  #askLog { flex-basis: 100%; display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
+  #askLog:empty { display: none; }
+  #askLog .row { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #askLog b { font-weight: normal; color: var(--cyan); } #askLog .refused b { color: var(--red); } #askLog .sent b { color: var(--green); }
+  body:has(.replay:not([hidden])) .ask, body.saver .ask, body.mini .ask { display: none !important; }
   .preview { left: 12px; bottom: 110px; width: 520px; height: 360px; min-width: 260px; min-height: 180px; padding: 0; display: flex; flex-direction: column; resize: both; overflow: hidden; clip-path: none; z-index: 12; background: var(--panel2); }
   .preview[hidden] { display: none; }
   .preview .bar { display: flex; align-items: center; gap: 6px; padding: 7px 10px; cursor: grab; user-select: none; touch-action: none; border-bottom: 1px solid var(--line); }
@@ -200,11 +217,18 @@
   /* mini window (?mini): about 480x270, counts, who needs you, and a tile per agent */
   #mini { display: none; position: fixed; z-index: 20; inset: 0; padding: 8px 10px; flex-direction: column; gap: 6px; }
   body.mini #mini { display: flex; }
-  body.mini header, body.mini aside, body.mini .sidetab, body.mini footer, body.mini .preview, body.mini .brief, body.mini .replay, body.mini .guide, body.mini #rail, body.mini #empty, body.mini .nudge .msg, body.mini #tip { display: none !important; }
+  body.mini header, body.mini aside, body.mini .sidetab, body.mini footer, body.mini .preview, body.mini .brief, body.mini .replay, body.mini .guide, body.mini #rail, body.mini #empty, body.mini #tip { display: none !important; }
   #mini { pointer-events: none; }
-  .mst { pointer-events: auto; cursor: pointer; display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--green); }
-  .mst b { font: 700 20px var(--head); letter-spacing: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .mst span { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mst { pointer-events: auto; cursor: pointer; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; padding: 6px 10px; text-align: left; color: inherit; font: inherit; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--green); transition: border-color .2s ease-out; }
+  .mst:hover, .mst:focus-visible { border-color: var(--text); outline: none; }
+  .mst b { font: 700 20px var(--head); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; transition: color .2s ease-out; }
+  .mst span { font: 12px var(--head); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; font-variant-numeric: tabular-nums; }
+  .mst.done, .mst.rest { border-left-color: var(--green); } .mst.done b, .mst.rest b { color: var(--green); }
+  .mst.slow { border-left-color: var(--amber); } .mst.slow b { color: var(--amber); }
+  @media (prefers-reduced-motion: reduce) { .mst, .mst b { transition: none; } }
+  /* the banner already says who needs you: no second accent round the whole window */
+  body.mini .nudge { display: none !important; }
+  body.compact canvas { display: none; } body.compact #mini { padding: 4px; }
   .mst.ok { border-left-color: var(--green); } .mst.ok b { color: var(--green); }
   .mst.warn { border-left-color: var(--amber); } .mst.warn b { color: var(--amber); }
   .mst.need { border-left-color: var(--yellow); } .mst.need b { color: var(--yellow); }
@@ -222,7 +246,8 @@
   <div class="uplink" id="uplink"><i></i><span>Live</span></div>
   <button class="cy ghost" id="viewBtn" title="Web of agents, one-agent core, or automatic (V)">View: Auto</button>
   <select id="styleSel" aria-label="Style" title="Style ([ and ] to step through)"></select>
-  <button class="cy ghost" id="saverBtn" title="Screensaver (Z)">Screensaver</button>
+  <button class="cy ghost" id="miniBtn" title="Open the small always-on-top monitor (K)">Mini</button>
+  <button class="cy ghost" id="saverBtn" title="Screensaver (Z)">Saver</button>
   <button class="cy ghost" id="replayBtn" title="Scrub back through this session (R)">Replay</button>
   <button class="cy ghost" id="siteBtn" title="Show or hide the site preview (S)">Site</button>
   <button class="cy ghost" id="panelBtn" title="Show or hide details (Tab)">Details</button>
@@ -238,8 +263,15 @@
 <button class="sidetab" id="sideTab" title="Show details (Tab)">‹ Details</button>
 <footer class="frame" id="log">
   <div class="bar" id="logBar" title="Drag to move. Double-click or L to expand."><div class="label">Activity</div><button id="logBtn" title="Expand or shrink (L)">▢</button></div>
+  <div class="pairs" id="pairs" title="Tools in use beside Claude"></div>
   <div id="logBody"></div>
 </footer>
+<form class="frame ask" id="ask" aria-label="Message Claude">
+  <textarea id="askText" rows="1" maxlength="4000" placeholder="Message Claude  ( M )" aria-label="Message to Claude"></textarea>
+  <button type="button" class="cy ghost" id="askDraft" title="Put it in Claude's prompt box to edit before sending">Draft</button>
+  <button type="submit" class="cy" title="Send to Claude (Enter). Shift+Enter for a new line.">Send</button>
+  <div id="askLog" role="status" aria-live="polite"></div>
+</form>
 <main class="guide" id="guide" hidden aria-label="Guide">
   <h1>What the signals mean</h1>
   <p>Agent Web draws what each agent is doing right now. With several agents running it shows the <b>web</b>, with one it shows the <b>core</b>. Colours mean the same thing everywhere.</p>
@@ -327,7 +359,7 @@
 <div class="saverline" id="saverLine"></div>
 <div class="tip" id="tip" role="tooltip"></div>
 <div class="sr" id="live" aria-live="polite"></div>
-<div id="mini"></div>
+<div id="mini"><button type="button" class="mst ok" id="mbanner" title="Back to Claude"><b id="mhead"></b><span id="msub"></span></button><div class="sr" role="status" id="mlive"></div></div>
 <section class="frame preview" id="preview" hidden aria-label="Site preview">
   <div class="bar" id="pvBar" title="Drag to move. Drag the bottom-right corner to resize."><div class="label" id="pvTitle">Site preview</div><select id="pvPick" aria-label="Which site to preview"><option value="auto">Auto</option></select><button id="pvReload" title="Reload" aria-label="Reload preview">⟳</button><a id="pvOpen" href="#" target="_blank" rel="noopener" title="Open in a new tab" aria-label="Open in a new tab">↗</a><button id="pvClose" title="Hide (S)" aria-label="Hide preview">×</button></div>
   <iframe id="pvFrame" title="Site being built" sandbox="allow-scripts allow-forms allow-popups"></iframe>
@@ -361,7 +393,9 @@ const cv = document.getElementById('c'), g = cv.getContext('2d')
 let W = 0, H = 0, DPR = 1
 const nodes = new Map()       // id -> view state (position, effects, what was seen)
 let snap = { agents: [], series: [], sites: [] }
-let focusId = 'main', hoverId = null, firstApply = true, lastOk = 0
+let focusId = 'main', hoverId = null, firstApply = true, lastOk = 0, otherSession = false
+// The mod rewrites state.json at least every 2 s while Claude runs, so a file that stops changing means Claude is gone.
+const LOST_AFTER = 6000
 const pulses = [], sparks = [], logRows = []
 
 function resize() {
@@ -750,7 +784,8 @@ let LOW = false, onBattery = false, lastDraw = 0, frameCost = 0, heavy = false
 const refreshPower = () => { LOW = onBattery || !!saverSince || heavy || MINI }
 if (navigator.getBattery) navigator.getBattery().then(b => { const set = () => { onBattery = !b.charging; refreshPower() }; set(); b.addEventListener('chargingchange', set) }).catch(() => {})
 addEventListener('focus', refreshPower); addEventListener('blur', refreshPower)
-const fps = () => (saverSince || (onBattery && !document.hasFocus()) ? 30 : 60)
+// the mini sits in a corner all day: 15 fps is plenty there
+const fps = () => (MINI ? 15 : saverSince || (onBattery && !document.hasFocus()) ? 30 : 60)
 const guideEl = document.getElementById('guide')
 // glow is the costliest thing drawn, so low power switches it off where it is set
 { const d = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'shadowBlur'); Object.defineProperty(g, 'shadowBlur', { get() { return d.get.call(this) }, set(v) { d.set.call(this, LOW ? 0 : v) } }) }
@@ -801,8 +836,17 @@ function renderHud() {
   document.title = (waits ? `(${waits} waiting) ` : la.length ? `(${la.length}!) ` : '') + 'Agent Web'
   const sl = document.getElementById('saverLine')
   if (sl) sl.textContent = ll.length ? `${ll.filter(a => a.status === 'working').length} working · ${ll.filter(a => a.status === 'done').length} done${waits ? ` · ${waits} waiting for you` : ''}${la.length - waits ? ` · ${la.length - waits} need a look` : ''} · press any key` : 'Waiting for agents · press any key'
-  document.getElementById('kpis').innerHTML = k.map(([l, v, c]) => `<div class="kpi ${c}"${c === 'att' ? ' role="button" tabindex="0" title="Jump to the agent that needs you (N)"' : ''}><b>${esc(v)}</b><span>${l}</span></div>`).join('')
+  renderPairs(snap.pairings)
+  document.getElementById('kpis').innerHTML = k.map(([l, v, c]) => `<div class="kpi ${c}" data-k="${l}"${c === 'att' ? ' role="button" tabindex="0" title="Jump to the agent that needs you (N)"' : ''}><b>${esc(v)}</b><span>${l}</span></div>`).join('')
 }
+/** Tools in use beside Claude, on a line in the Activity box: the Caveman / Ponytail modes and Headroom's savings since this session started. */
+function renderPairs(p) {
+  const parts = ((p && p.modes) || []).map(m => `${cap(m.name)} ${m.level}`)
+  if (p && p.headroom) parts.push(`Headroom saved ${fmtTokens(p.headroom.tokens)}${p.headroom.usd !== undefined ? ' · $' + p.headroom.usd.toFixed(2) : ''}`)
+  const el = document.getElementById('pairs'), text = parts.join(' · ')
+  if (el.textContent !== text) el.textContent = text
+}
+const fmtTokens = n => (n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'k' : String(n)) + ' tok'
 function renderLegend() {
   document.getElementById('legend').innerHTML = Object.entries(KIND_NAME).filter(([k]) => k !== 'other').map(([k, nm]) => `<div><i style="background:${KIND[k]}"></i>${nm}</div>`).join('') +
     '<div class="lk">Hexagon: an agent. Outer arc: tools it used. Ring spin: recent activity.<br>Cells under it: last 12 actions, red = failed.<br>◆ needs you · ▲ stuck · ◌ quiet</div><div class="lk"><button class="lkb" id="keyGuide">Full guide (G)</button></div>'
@@ -1258,7 +1302,7 @@ new ResizeObserver(() => { clearTimeout(pvEl._t); pvEl._t = setTimeout(() => { i
 /** The mod decides what needs the person (one tested rule for both surfaces); the page adds colour and a live "how long". */
 function attention(a, now) {
   const t = a.attention
-  if (t !== undefined) return t ? { ...t, color: t.kind === 'wait' ? C.yellow : C.amber, text: t.since ? `${t.text} · ${ago(t.since)}` : t.text } : null
+  if (t !== undefined) return t ? { ...t, color: t.kind === 'wait' ? C.yellow : C.amber, base: t.text, text: t.since ? `${t.text} · ${ago(t.since)}` : t.text } : null
   return attentionLocal(a, now)
 }
 // shortcut: only the ?demo feed, which has no mod behind it, still works this out on the page.
@@ -1340,6 +1384,7 @@ const history = []          // { t, s }: an agent unchanged since the frame befo
 const seenAgent = new Map()
 let replaying = false, rpIdx = 0, rpPlay = false, rpSpeed = 4, rpTimer = 0, liveLog = null, latest = null
 function record(s) {
+  if (MINI) return   // the mini has no replay
   const agents = (s.agents || []).map(a => { const j = JSON.stringify(a), old = seenAgent.get(a.id); if (old && old.j === j) return old.a; seenAgent.set(a.id, { j, a }); return a })
   const fr = { t: Date.now(), s: { ...s, agents } }, prev = history[history.length - 1]
   if (prev && fr.t - prev.t < 500) history[history.length - 1] = fr; else history.push(fr)
@@ -1347,7 +1392,35 @@ function record(s) {
   if (replaying) updateReplayBar()
 }
 /** Every new state goes through here: kept for replay, drawn unless a replay is showing. */
-function ingest(s) { latest = s; record(s); if (!replaying) apply(s) }
+function ingest(s) { latest = s; record(s); if (!replaying) apply(s); renderAsks(s.asks) }
+
+// ---------- message box: what you type goes to Claude as your own prompt, or into its prompt box as a draft ----------
+const askForm = document.getElementById('ask'), askText = document.getElementById('askText'), askLog = document.getElementById('askLog')
+const ASK_WORD = { queued: 'Waiting for Claude', sent: 'Sent', drafted: 'In the prompt box', refused: 'Not sent' }
+let askNote = ''
+function renderAsks(list) {
+  const rows = (list || []).slice(-3).map(a => `<div class="row ${a.status}"><b>${ASK_WORD[a.status] || a.status}</b> · ${esc(a.text)}</div>`)
+  askLog.innerHTML = rows.join('') + (askNote ? `<div class="row refused"><b>${esc(askNote)}</b></div>` : '')
+}
+async function sendAsk(mode) {
+  const text = askText.value.trim()
+  if (!text) return askText.focus()
+  askNote = ''
+  try {
+    const r = await fetch('/ask', { method: 'POST', headers: { 'X-Agent-Web': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ text, mode }) })
+    if (!r.ok) throw new Error(String(r.status))
+    askText.value = ''; fitAsk()
+  } catch { askNote = 'Could not reach Claude. Is the session still running?' }
+  renderAsks(latest && latest.asks)
+}
+function fitAsk() { askText.style.height = 'auto'; askText.style.height = Math.min(askText.scrollHeight, 120) + 'px' }
+askForm.onsubmit = e => { e.preventDefault(); sendAsk('send') }
+document.getElementById('askDraft').onclick = () => sendAsk('draft')
+askText.addEventListener('input', fitAsk)
+askText.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendAsk('send') }
+  if (e.key === 'Escape') askText.blur()
+})
 const rpEl = document.getElementById('replay'), rpRange = document.getElementById('rpRange')
 function openReplay() {
   if (history.length < 2) return
@@ -1502,13 +1575,22 @@ async function backToClaude() {
   location.href = 'claude://'
 }
 document.getElementById('backBtn').onclick = backToClaude
+/** Opens the mini monitor: the mod's native window when the session is live, else a small browser window of this page. */
+async function openMini() {
+  try { const r = await fetch('/open-mini', { method: 'POST', headers: { 'X-Agent-Web': '1' } }); if (r.ok) return } catch {}
+  const q = new URLSearchParams(location.search); q.set('mini', '')
+  window.open(location.pathname + '?' + q, 'agentWebMini', 'width=480,height=300')
+}
+document.getElementById('miniBtn').onclick = openMini
 
 // ---------- styles: swappable looks; each file in themes/ calls registerTheme (contract: themes/README.md) ----------
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)')
 const BASE = { C: { ...C }, F: { ...F } }
 const THEMES = {}, THEME_VARS = ['--bg', '--panel', '--panel2', '--line', '--cyan', '--yellow', '--red', '--green', '--purple', '--amber', '--blue', '--dim', '--text', '--muted', '--mono', '--head', '--clip', '--radius']
 let theme = null
-let wantTheme = (() => { const q = new URLSearchParams(location.search).get('theme'); if (q) return q; try { return localStorage.getItem('agentWebStyle') || 'neon' } catch { return 'neon' } })()
+// Retired styles: a saved or linked old id lands on the closest one still here
+const RENAMED = { blueprint: 'holoprint', hologram: 'holoprint', starry: 'aurora', orrery: 'aurora', deadchannel: 'neon', blobtrack: 'neon', ocean: 'neon', living: 'neon' }
+let wantTheme = (() => { const q = new URLSearchParams(location.search).get('theme'); if (q) return RENAMED[q] || q; try { const v = localStorage.getItem('agentWebStyle') || 'neon'; return RENAMED[v] || v } catch { return 'neon' } })()
 function registerTheme(t) { THEMES[t.id] = t; syncStyleMenu(); if (t.id === wantTheme) applyTheme(t.id) }
 /** Switches the look: colours, fonts, CSS variables and the drawing hooks. `provisional` holds a look until the wanted one loads. */
 function applyTheme(id, provisional) {
@@ -1665,72 +1747,126 @@ function toggleRail() { railOn = !railOn; try { localStorage.setItem('agentWebRa
 /** ?mini: one status line that says whether everything is moving, who is slow or stuck, and how long since the last action. */
 const SLOW = 60000
 const lastAct = a => { const st = a.steps || [], l = st[st.length - 1]; return l ? Math.max(l.at, l.endAt || 0) : a.startedAt || 0 }
-let miniTick = 0
 function miniState(rows, now) {
-  const working = rows.filter(r => r.a.status === 'working'), newest = rows.reduce((m, r) => Math.max(m, lastAct(r.a)), 0)
+  const working = rows.filter(r => r.a.status === 'working'), done = rows.filter(r => r.a.status === 'done').length
+  const newest = rows.reduce((m, r) => Math.max(m, lastAct(r.a)), 0)
   const since = newest ? `last action ${ago(newest)}${ago(newest) === 'now' ? '' : ' ago'}` : 'no actions yet'
-  const counts = `${working.length} working · ${rows.length - working.length} done`
-  if (Date.now() - lastOk > 4000) return { cls: 'bad', head: 'NO SIGNAL', sub: `no update for ${ago(lastOk)} · check Claude is running` }
-  if (!rows.length) return { cls: 'idle', head: 'WAITING FOR AGENTS', sub: 'nothing started yet' }
-  const wait = rows.find(r => r.att && r.att.kind === 'wait'); if (wait) return { cls: 'need', head: `◆ NEEDS YOU`, sub: `${wait.a.label}: ${wait.att.text}` }
-  const stuck = rows.find(r => r.att && r.att.kind === 'stuck'); if (stuck) return { cls: 'warn', head: '▲ STUCK', sub: `${stuck.a.label}: ${stuck.att.text}` }
-  if (!working.length) return { cls: 'idle', head: 'ALL DONE', sub: `${counts} · ${since}` }
+  const counts = `${working.length} working · ${done} done`
+  if (otherSession) return { cls: 'bad', head: 'Other session', sub: 'this window shows another Claude session · reopen it from yours' }
+  if (Date.now() - lastOk > LOST_AFTER) return { cls: 'bad', head: 'No signal', sub: `no update for ${ago(lastOk)} · check Claude is running` }
+  if (!rows.length) return { cls: 'idle', head: 'Waiting for agents', sub: 'nothing started yet' }
+  // every problem is counted; the line below names the one waiting longest, its name and time first so a narrow window cuts the detail, not them
+  const byAge = (x, y) => (x.att.since || now) - (y.att.since || now)
+  const waits = rows.filter(r => r.att && r.att.kind === 'wait').sort(byAge), stuck = rows.filter(r => r.att && r.att.kind !== 'wait').sort(byAge)
+  if (waits.length || stuck.length) {
+    const head = [waits.length && `◆ ${waits.length} need${waits.length > 1 ? '' : 's'} you`, stuck.length && `▲ ${stuck.length} stuck`].filter(Boolean).join(' · ')
+    const r = waits[0] || stuck[0]
+    return { cls: waits.length ? 'need' : 'warn', head, sub: [r.a.label, r.att.since && ago(r.att.since), r.att.base || r.att.text].filter(Boolean).join(' · ') }
+  }
+  // helpers finished is news; the main agent ending a reply is not, so that one is shown the same but never notified
+  if (!working.length) return { cls: rows.some(r => r.a.parentId) ? 'done' : 'rest', head: '✓ All done', sub: `${counts} · ${since}` }
   const slow = working.filter(r => now - lastAct(r.a) > SLOW).sort((x, y) => lastAct(x.a) - lastAct(y.a))
-  if (slow.length) return { cls: 'warn', head: 'SLOW', sub: `${slow[0].a.label} quiet ${ago(lastAct(slow[0].a))}${slow.length > 1 ? ` (+${slow.length - 1} more)` : ''} · ${counts}` }
-  return { cls: 'ok', head: 'RUNNING', sub: `${counts} · ${since}` }
+  if (slow.length) return { cls: 'slow', head: `◌ ${slow.length} slow`, sub: `${slow[0].a.label} · quiet ${ago(lastAct(slow[0].a))} · ${counts}` }
+  return { cls: 'ok', head: `● ${working.length} running`, sub: `${counts} · ${since}` }
 }
+// the banner is built once and updated in place, so its colour can ease and a screen reader hears only a new headline
+const mBanner = document.getElementById('mbanner'), mHead = document.getElementById('mhead'), mSub = document.getElementById('msub'), mLive = document.getElementById('mlive')
 function renderMini() {
   if (!MINI) return
   const st = miniState(agentRows(), Date.now())
-  document.getElementById('mini').innerHTML = `<div class="mst ${st.cls}" id="mbanner" title="Back to Claude"><b>${miniTick++ % 2 ? '●' : '○'} ${esc(st.head)}</b><span>${esc(st.sub)}</span></div>`
+  mBanner.className = 'mst ' + st.cls
+  if (mHead.textContent !== st.head) { mHead.textContent = st.head; mLive.textContent = st.head }
+  mSub.textContent = st.sub
+  // the native window's menu bar item and notifications read the same state (absent in a browser window)
+  window.webkit?.messageHandlers?.lv?.postMessage({ cls: st.cls, head: st.head, sub: st.sub, short: miniShort(st) })
 }
+/** The menu bar item's few characters: the headline's marks and counts. */
+function miniShort(st) {
+  if (st.cls === 'bad') return '✕'
+  if (st.cls === 'idle') return '○'
+  return st.head.replace(/ (needs?|you|stuck|running|slow|All done)/g, '').trim()
+}
+/** Compact strip (the native window's menu): the banner only, no canvas. */
+function setCompact(on) { document.body.classList.toggle('compact', !!on) }
 // the "ago" counter keeps ticking even when no data arrives: a frozen window cannot do that
 if (MINI) setInterval(renderMini, 1000)
-document.getElementById('mini').onclick = e => { if (e.target.closest('#mbanner')) backToClaude() }
+mBanner.onclick = backToClaude
 
 let miniNet = null
-/** ?mini canvas: the style's sphere, a dot per agent round it, and a tape of the last 2 minutes of actions sliding left. */
+// when each agent last changed alert, so its mark pulses once on the way in, not forever
+const miniSeen = new Map()
+/** ?mini canvas: the style's sphere, a dot per agent round it, and a tape of the last 2 minutes of actions sliding left.
+ *  Calm when fine, loud when not: working dots stay small and steady, alerts are bigger, outlined and named. */
 function drawMini(now) {
-  const rows = agentRows(), t = motionT(now), tapeH = 30, topH = 58
+  if (document.body.classList.contains('compact')) return
+  const rows = agentRows(), t = motionT(now), still = REDUCED.matches, tapeH = 30
+  const topH = mBanner.getBoundingClientRect().bottom + 6, flat = H < 220
   const cx = W / 2, cy = topH + (H - topH - tapeH - 8) / 2
   const R = Math.max(24, Math.min(W * 0.16, (H - topH - tapeH - 16) / 2.9))
-  g.fillStyle = 'rgba(5,5,10,.6)'; g.fillRect(0, 0, W, H)
+  // light styles keep their own ground; a dark wash only quiets the dark ones
+  if (!document.documentElement.hasAttribute('data-light')) { g.fillStyle = 'rgba(5,5,10,.6)'; g.fillRect(0, 0, W, H) }
   const recent = rows.reduce((s, r) => s + (r.a.steps || []).filter(x => now - x.at < 30000).length, 0)
   const top = rows.filter(r => r.a.status === 'working').sort((x, y) => lastAct(y.a) - lastAct(x.a))[0], kind = top ? currentKind(top.a, now) : null
-  miniNet ||= makeNet(1)
-  const P = (u, v) => [cx + u * R, cy + v * R]
-  const cc = { cx, cy, R, now, t, kind, fire: kind === 'error' ? C.red : KIND[kind] || C.cyan, steps: [], cur: -1, goal: { x: cx, y: cy }, complete: false, flare: 0, recent, low: true, jitter: false, tip: null, net: miniNet, P }
-  g.save()
-  try { if (!(theme && theme.sphere)) throw 0; theme.sphere(g, cc) } catch {
-    g.restore(); g.save()
-    const mt = t * 1000; g.strokeStyle = C.shell; g.lineWidth = 1.2; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke()
-    g.strokeStyle = C.wire; for (let i = 0; i < 4; i++) { g.beginPath(); g.ellipse(cx, cy, Math.max(0.5, R * Math.abs(Math.cos(mt / 9000 + i * Math.PI / 4))), R, 0, 0, Math.PI * 2); g.stroke() }
+  if (!flat) {
+    miniNet ||= makeNet(1)
+    const P = (u, v) => [cx + u * R, cy + v * R]
+    const cc = { cx, cy, R, now, t, kind, fire: kind === 'error' ? C.red : KIND[kind] || C.cyan, steps: [], cur: -1, goal: { x: cx, y: cy }, complete: false, flare: 0, recent, low: true, jitter: false, tip: null, net: miniNet, P }
+    g.save()
+    try { if (!(theme && theme.sphere)) throw 0; theme.sphere(g, cc) } catch {
+      g.restore(); g.save()
+      const mt = t * 1000; g.strokeStyle = C.shell; g.lineWidth = 1.2; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke()
+      g.strokeStyle = C.wire; for (let i = 0; i < 4; i++) { g.beginPath(); g.ellipse(cx, cy, Math.max(0.5, R * Math.abs(Math.cos(mt / 9000 + i * Math.PI / 4))), R, 0, 0, Math.PI * 2); g.stroke() }
+    }
+    g.restore()
   }
-  g.restore()
-  // a dot per agent on an orbit; it flares at each new action, hollows amber when it has gone quiet, and takes the alert's shape
+  // a dot per agent: on an orbit, or in one row when the window is short
   const n = Math.min(rows.length, 18), rx = Math.min(R * 2.5, W / 2 - 24), ry = Math.min(R * 1.55, (H - topH - tapeH) / 2 - 8)
+  const labels = []
   rows.slice(0, n).forEach((r, i) => {
-    const ang = -Math.PI / 2 + i / n * Math.PI * 2 + t * 0.06, x = cx + Math.cos(ang) * rx, y = cy + Math.sin(ang) * ry
-    const working = r.a.status === 'working', age = now - lastAct(r.a), slow = working && age > SLOW, flash = working ? Math.max(0, 1 - age / 1500) : 0
-    const col = r.att ? r.att.color : slow ? C.amber : working ? C.cyan : C.green, rad = 5 + flash * 5
-    if (flash) { g.globalAlpha = flash * 0.5; g.fillStyle = col; g.beginPath(); g.arc(x, y, rad + 7, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1 }
-    g.fillStyle = col; g.strokeStyle = col; g.lineWidth = 2; g.globalAlpha = working || r.att ? 1 : 0.55
-    g.beginPath()
-    if (r.att && r.att.kind === 'wait') { g.moveTo(x, y - rad - 2); g.lineTo(x + rad + 2, y); g.lineTo(x, y + rad + 2); g.lineTo(x - rad - 2, y); g.closePath(); g.fill() }
-    else if (r.att) { g.moveTo(x, y - rad - 1); g.lineTo(x + rad + 1, y + rad); g.lineTo(x - rad - 1, y + rad); g.closePath(); g.fill() }
-    else if (slow) { g.arc(x, y, rad, 0, Math.PI * 2); g.stroke() }
-    else { g.arc(x, y, working ? rad : 3.5, 0, Math.PI * 2); g.fill() }
-    g.globalAlpha = 1
+    const ang = -Math.PI / 2 + i / n * Math.PI * 2 + t * 0.06
+    const x = flat ? 20 + (i + 0.5) * (W - 40) / n : cx + Math.cos(ang) * rx, y = flat ? cy : cy + Math.sin(ang) * ry
+    const working = r.a.status === 'working', age = now - lastAct(r.a), slow = working && age > SLOW
+    const akey = r.att ? r.att.kind : '', seen = miniSeen.get(r.a.id)
+    if (!seen || seen.k !== akey) miniSeen.set(r.a.id, { k: akey, at: now })
+    const entered = now - miniSeen.get(r.a.id).at
+    if (r.att) {
+      // alert: 9 px, outlined against the backdrop, one 250 ms pulse when it starts
+      const pulse = still ? 0 : Math.max(0, 1 - entered / 250), rad = 9 + pulse * 4
+      g.fillStyle = r.att.color; g.strokeStyle = C.bg; g.lineWidth = 2
+      g.beginPath()
+      if (r.att.kind === 'wait') { g.moveTo(x, y - rad); g.lineTo(x + rad, y); g.lineTo(x, y + rad); g.lineTo(x - rad, y) }
+      else { g.moveTo(x, y - rad); g.lineTo(x + rad, y + rad * 0.8); g.lineTo(x - rad, y + rad * 0.8) }
+      g.closePath(); g.stroke(); g.fill()
+      labels.push({ x, y: y + rad + 4, text: cut(r.a.label, 14), color: r.att.color })
+      return
+    }
+    if (slow) { g.strokeStyle = C.amber; g.lineWidth = 1.5; g.beginPath(); g.arc(x, y, 4.5, 0, Math.PI * 2); g.stroke(); return }
+    if (!working) { g.strokeStyle = C.green; g.globalAlpha = 0.7; g.lineWidth = 1.5; g.beginPath(); g.arc(x, y, 3.5, 0, Math.PI * 2); g.stroke(); g.globalAlpha = 1; return }
+    g.fillStyle = C.cyan; g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill()
+    // a new action: one thin ring that widens and fades out, ease-out
+    // clamped: a step stamped a moment ahead of this clock must not give a negative radius
+    const ring = still ? 1 : Math.min(1, Math.max(0, age / 400))
+    if (ring < 1) { const e = 1 - (1 - ring) ** 2; g.strokeStyle = C.cyan; g.globalAlpha = 1 - e; g.lineWidth = 1; g.beginPath(); g.arc(x, y, 4 + e * 8, 0, Math.PI * 2); g.stroke(); g.globalAlpha = 1 }
   })
-  // the tape: every action of the last 2 minutes as a tick, sliding left; a stall is a gap that keeps growing
-  const x0 = 10, x1 = W - 10, ty = H - tapeH + 4, SPAN = 120000
+  // names under the alerts, on a dark pill so they read over any backdrop
+  g.font = `600 11px ${F.head}`; g.textAlign = 'center'; g.textBaseline = 'top'
+  for (const l of labels) {
+    const w = g.measureText(l.text).width + 10
+    g.fillStyle = C.labelBg || 'rgba(5,5,10,.85)'; g.fillRect(l.x - w / 2, l.y, w, 16)
+    g.fillStyle = l.color; g.fillText(l.text, l.x, l.y + 2)
+  }
+  g.textAlign = 'start'; g.textBaseline = 'alphabetic'
+  // the tape: the last 2 minutes, sliding left. One quiet tone for actions, red and taller for errors, a yellow band while someone waits on you
+  const x0 = 10, x1 = W - 10, ty = H - tapeH + 4, SPAN = 120000, xAt = age => x1 - age / SPAN * (x1 - x0)
   g.strokeStyle = C.line; g.lineWidth = 1; g.beginPath(); g.moveTo(x0, ty + 22); g.lineTo(x1, ty + 22); g.stroke()
+  for (const r of rows) if (r.att && r.att.kind === 'wait' && r.att.since) {
+    const a = Math.min(SPAN, now - r.att.since); g.fillStyle = C.yellow; g.globalAlpha = 0.35; g.fillRect(xAt(a), ty + 18, x1 - xAt(a), 4); g.globalAlpha = 1
+  }
   for (const r of rows) for (const s of r.a.steps || []) {
     const age = now - s.at; if (age < 0 || age > SPAN) continue
-    g.fillStyle = s.isError ? C.red : KIND[s.kind] || C.dim; g.globalAlpha = 1 - age / SPAN * 0.6
-    g.fillRect(x1 - age / SPAN * (x1 - x0), ty + (s.isError ? 2 : 6), 2, s.isError ? 20 : 16)
+    if (s.isError) { g.fillStyle = C.red; g.fillRect(xAt(age), ty, 3, 22); g.fillRect(xAt(age) - 1, ty, 5, 2); continue }
+    g.fillStyle = C.dim; g.globalAlpha = 0.55 - age / SPAN * 0.3; g.fillRect(xAt(age), ty + 8, 2, 14); g.globalAlpha = 1
   }
-  g.globalAlpha = 1
 }
 
 const tipEl = document.getElementById('tip')
@@ -1775,6 +1911,7 @@ addEventListener('keydown', e => {
   if (e.key === 's' || e.key === 'S') togglePv()
   if (e.key === 'r' || e.key === 'R') replaying ? closeReplay() : openReplay()
   if (e.key === 'c' || e.key === 'C') backToClaude()
+  if (e.key === 'k' || e.key === 'K') openMini()
   if (e.key === 'z' || e.key === 'Z') { lastInput = Date.now(); setSaver(!saverSince) }   // wake() skips Z, so mark the input here
   if (e.key === 'g' || e.key === 'G') showTab(document.getElementById('guide').hidden ? 'guide' : 'live')
   if (e.key === ']') stepTheme(1)
@@ -1782,19 +1919,20 @@ addEventListener('keydown', e => {
   if (e.key === 'n' || e.key === 'N') jumpAttention()
   if (e.key === 'a' || e.key === 'A') toggleRail()
   if (e.key === '/' && railWidth()) { e.preventDefault(); railQ.focus() }
+  if (e.key === 'm' || e.key === 'M') { e.preventDefault(); askText.focus() }
 })
 addEventListener('resize', () => { resize(); layout() })
 
 // ---------- feed: the mod's state file, or a demo ----------
 const uplink = document.getElementById('uplink'), uplinkText = uplink.querySelector('span')
-let lastAgents = ''
+let lastAgents = '', firstSid = ''
 async function poll() {
   try {
     const r = await fetch('state.json?t=' + Date.now(), { cache: 'no-store' })
-    if (r.ok) { const txt = await r.text(); lastOk = Date.now(); if (txt !== lastAgents) { const s = JSON.parse(txt); lastAgents = txt; ingest(s) } }
+    if (r.ok) { const txt = await r.text(); if (txt !== lastAgents) { lastOk = Date.now(); const s = JSON.parse(txt); lastAgents = txt; if (s.sid) { firstSid ||= s.sid; otherSession = s.sid !== firstSid } if (!otherSession) ingest(s) } }
   } catch {}
-  const lost = Date.now() - lastOk > 4000
-  uplink.className = 'uplink' + (lost ? ' lost' : ''); uplinkText.textContent = replaying ? 'Replay' : lost ? 'Disconnected' : 'Live'
+  const lost = Date.now() - lastOk > LOST_AFTER
+  uplink.className = 'uplink' + (lost || otherSession ? ' lost' : ''); uplinkText.textContent = replaying ? 'Replay' : otherSession ? 'Other session' : lost ? 'Disconnected' : 'Live'
 }
 
 /** ?demo: a made-up team, for trying the look without a session. */
@@ -1861,7 +1999,7 @@ function demo() {
 }
 
 if (new URLSearchParams(location.search).has('demo')) demo()
-else { const loop = async () => { await poll(); setTimeout(loop, document.hasFocus() ? 400 : 1200) }; loop() }
+else { const loop = async () => { await poll(); setTimeout(loop, MINI || document.hasFocus() ? 400 : 1200) }; loop() }
 registerTheme({ id: 'neon', name: 'Neon', backdrop: neonBackdrop })
 if (!theme) applyTheme('neon', true)
 // ?saver opens in screensaver mode; ?selftest times the drawing and reports errors into the page (for checking a style headless)
@@ -1877,18 +2015,11 @@ if (QS.has('selftest')) setTimeout(() => {
 }, +(QS.get('selftest') || 6000))
 renderHud(); renderLog(); requestAnimationFrame(frame)
 </script>
-<script src="themes/starry.js"></script>
 <script src="themes/iridescent.js"></script>
-<script src="themes/living.js"></script>
-<script src="themes/deadchannel.js"></script>
 <script src="themes/focus.js"></script>
-<script src="themes/ocean.js"></script>
 <script src="themes/aurora.js"></script>
-<script src="themes/blueprint.js"></script>
-<script src="themes/orrery.js"></script>
 <script src="themes/skybloom.js"></script>
 <script src="themes/sage.js"></script>
-<script src="themes/blobtrack.js"></script>
-<script src="themes/hologram.js"></script>
+<script src="themes/holoprint.js"></script>
 </body>
 </html>

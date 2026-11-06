@@ -4,20 +4,21 @@
 
 LiveView is a mod for [Claude Code](https://claude.com/claude-code). It adds a live view of your session: the main agent and every helper it starts, with the file each one is editing, the command it is running, the page it is reading, its plan, and what it costs. Open it beside the chat, in its own full-screen window, or as a small always-on-top monitor in a corner of your screen.
 
-![LiveView in its 14 styles](docs/styles-overview.png)
+![LiveView in its 7 styles](docs/styles-overview.png)
 
 ## What you get
 
 - **Live pane** (`/live-view`): a dashboard beside the chat with overview, team, agents, activity and files pages, plus charts of calls, lines changed, tokens and estimated cost over time.
 - **Agent team** (`/agent-team`): a wide org chart of every agent at once.
 - **Agent Web** (`/agent-web`): every agent as a node in a live web, in its own window. The main agent is a sphere, helpers are hexagons. Edits, reads, searches, runs and errors show as colour-coded activity. Includes replay, a screensaver mode and a full-screen view.
-- **Mini monitor** (`/agent-mini`): a small always-on-top window with counts and one tile per agent. Uses a native macOS window when `swiftc` is installed, otherwise a small Chrome window.
+- **Mini monitor** (`/agent-mini`, or the **Mini** button / `K` in the Agent Web): a small always-on-top window with counts and one tile per agent. Uses a native macOS window when `swiftc` is installed, otherwise a small Chrome window.
 - **Each agent's screen**: the file it is editing with the changed lines marked, the terminal it is typing in, or the page it is browsing.
 - **Plain-language updates**: "Read 3 files", "Added 12 lines to auth.ts", "3 tests failed".
 - **Plan and task cards**: the task each agent was given and the steps from its own to-do list.
 - **Site preview**: when an agent starts a local dev server or edits an HTML page, LiveView shows a snapshot of it.
 - **Attention alerts**: an agent that needs you, is stuck, is struggling or runs long gets flagged with a shape as well as a colour, and a pop-up for the last three. Keyboard: `A` toggles the agent rail, `/` searches, `N` jumps to whoever needs you.
-- **14 styles** (Neon, Starry Night, Iridescent, Living core, Dead channel, Focus, Deep ocean, Aurora, Blueprint, Orrery, Sky bloom, Sage, Blob tracking, Hologram). A style changes how things look, never what they say: colour meanings are the same in all of them (green edit, cyan read, yellow search/goal, amber run, blue web, purple helper, red error).
+- **Message Claude from the Agent Web**: type in the box at the bottom (`M` to focus) and press Enter to send it to Claude, marked as coming from LiveView; Claude reads it as soon as it's free. **Draft** adds it to Claude's prompt box instead, to edit before sending. The last few messages show whether they were sent.
+- **7 styles** (Neon, Iridescent, Focus, Aurora, Holo blueprint, Sky bloom, Sage). A style changes how things look, never what they say: colour meanings are the same in all of them (green edit, cyan read, yellow search/goal, amber run, blue web, purple helper, red error).
 - **Optional sounds**: a tick on edits, a chime when tests pass or an agent finishes, a buzz on failure. Off by default; turn on with the `sounds` option.
 
 ## Install

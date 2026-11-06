@@ -8,8 +8,8 @@ A style changes **how things look, never what they say**: labels, text, alerts, 
 
 ```js
 registerTheme({
-  id: 'starry',                 // stable id, used in ?theme= and saved in localStorage
-  name: 'Starry Night',         // shown in the Style menu
+  id: 'aurora',                 // stable id, used in ?theme= and saved in localStorage
+  name: 'Aurora',               // shown in the Style menu
   light: false,                 // true for a light theme (sets color-scheme)
   fontUrl: 'https://fonts.googleapis.com/css2?family=…&display=swap',   // optional Google Fonts stylesheet
   fonts: { mono: '"IBM Plex Mono", monospace', head: '"Cormorant Garamond", serif' },  // canvas fonts

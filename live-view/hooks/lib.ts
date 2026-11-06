@@ -58,7 +58,7 @@ export function attentionOf(a: AgentView, now: number): Attention | undefined {
   if (a.waiting && a.waiting.person !== false && now - a.waiting.since >= NEEDS_YOU_AFTER) {
     // the engine says when it asks, not when the person answers: after a while an unconfirmed ask may well be running
     return a.waiting.person || now - a.waiting.since < 90_000
-      ? { kind: 'wait', short: 'Needs you', text: `Waiting for your approval · ${a.waiting.tool}`, since: a.waiting.since }
+      ? { kind: 'wait', short: 'Needs you', text: a.waiting.tool === 'AskUserQuestion' ? 'Waiting for your answer' : a.waiting.tool === 'ExitPlanMode' ? 'Waiting for you to approve the plan' : `Waiting for your approval · ${a.waiting.tool}`, since: a.waiting.since }
       : { kind: 'wait', short: 'Needs you?', text: `Asked to approve ${a.waiting.tool} · may be running now`, since: a.waiting.since }
   }
   const last = a.steps[a.steps.length - 1]

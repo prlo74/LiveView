@@ -152,6 +152,8 @@ declare module 'claude-code' {
       siteMode: Shaped<SiteMode>
       /** Whether the Agent Web window was opened this session. */
       webOn: Shaped<boolean>
+      /** Headroom's first reading this session, the zero its savings count from. */
+      headroomBase: Shaped<{ tokens: number; usd?: number } | null>
     }
   }
 }

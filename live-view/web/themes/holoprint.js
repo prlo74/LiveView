@@ -1,8 +1,10 @@
-/* Blueprint: a drafting sheet in blueprint blue with a fine grid, centre lines, construction circles and lines that are drawn and rubbed out, a sweeping scan line, dimension lines
-   and a small title block; the core is a technical drawing of a sphere, and firing chains are coloured pen strokes. */
+/* Holo blueprint: the Blueprint drafting sheet (grid, centre lines, construction lines drawn and rubbed out, scan line, title block) as the background,
+   with the Hologram look on top: a wire-and-particle globe in turning segmented rings, glowing links and neurons, and its chrome and fonts. */
 ;(() => {
   const TAU = Math.PI * 2
-  const INK = '207,232,255'   // #cfe8ff, the line-work
+  const INK = '207,232,255'   // #cfe8ff, the sheet's line-work
+  const CY = '0,210,255', ICE = '127,233,255', HOT = '225,250,255'
+  const rng = s => () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296
 
   // a dimension line from (x1,y1) to (x2,y2): arrowheads at both ends, the label in a gap at the middle
   function dimension(g, x1, y1, x2, y2, label, a) {
@@ -182,119 +184,169 @@
       g.beginPath(); g.moveTo(tx, ty + 20); g.lineTo(tx + tw, ty + 20); g.moveTo(tx + 150, ty + 20); g.lineTo(tx + 150, ty + th); g.stroke()
       g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = C.muted
       g.font = `600 10px ${F.mono}`; g.fillText(`AGENT WEB · ${core ? 'CORE VIEW' : 'WEB VIEW'}`, tx + 8, ty + 10.5)
-      g.font = `9px ${F.mono}`; g.fillText('GRID 16 · MAJOR 80', tx + 8, ty + 29.5); g.fillText('BLUEPRINT', tx + 158, ty + 29.5)
+      g.font = `9px ${F.mono}`; g.fillText('GRID 16 · MAJOR 80', tx + 8, ty + 29.5); g.fillText('HOLO PRINT', tx + 158, ty + 29.5)
     }
   }
 
-  // ---- core view ----
-  let coreKey = -1, Q = null
-  function coreGeo(R) {
-    if ((R | 0) === coreKey) return Q
-    coreKey = R | 0
-    const wall = new Path2D(), hatch = new Path2D(), inner = new Path2D(), ticks = new Path2D(), centre = new Path2D()
-    wall.arc(0, 0, R, 0, TAU); wall.moveTo(R * 0.9, 0); wall.arc(0, 0, R * 0.9, 0, TAU)
-    for (let d = -2 * R; d <= 2 * R; d += 7) { hatch.moveTo(d - R, R); hatch.lineTo(d + R, -R) }
-    for (const k of [0.34, 0.66]) { inner.moveTo(R * k, 0); inner.arc(0, 0, R * k, 0, TAU) }
-    for (let i = 0; i < 120; i++) {
-      const a = i / 120 * TAU, l = i % 10 ? (i % 5 ? 4 : 7) : 11, r0 = R * 1.045
-      ticks.moveTo(Math.cos(a) * r0, Math.sin(a) * r0); ticks.lineTo(Math.cos(a) * (r0 + l), Math.sin(a) * (r0 + l))
+  // ---- the globe: filament rings and particles on a unit sphere, turned in 3D each frame ----
+  const RINGS = (() => {
+    const r = rng(77), out = []
+    for (let i = 0; i < 9; i++) {
+      // tilted great/small circles: normal n, latitude offset h
+      const th = r() * TAU, ph = Math.acos(2 * r() - 1), n = [Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th)], h = i < 3 ? 0 : (r() - 0.5) * 1.2
+      const e1 = Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0], u0 = [n[1] * e1[2] - n[2] * e1[1], n[2] * e1[0] - n[0] * e1[2], n[0] * e1[1] - n[1] * e1[0]]
+      const ul = Math.hypot(...u0), u = u0.map(v => v / ul), v = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]], rr = Math.sqrt(1 - h * h)
+      const pts = []
+      for (let j = 0; j <= 40; j++) { const a = j / 40 * TAU; pts.push([0, 1, 2].map(k => n[k] * h + rr * (Math.cos(a) * u[k] + Math.sin(a) * v[k]))) }
+      out.push(pts)
     }
-    centre.moveTo(-R * 1.42, 0.5); centre.lineTo(R * 1.42, 0.5); centre.moveTo(0.5, -R * 1.36); centre.lineTo(0.5, R * 1.36)
-    Q = { wall, hatch, inner, ticks, centre }
-    return Q
+    return out
+  })()
+  const DOTS = (() => { const r = rng(311), o = []; for (let i = 0; i < 140; i++) { const z = 2 * r() - 1, a = r() * TAU, s = Math.sqrt(1 - z * z), k = 0.55 + 0.45 * Math.cbrt(r()); o.push([s * Math.cos(a) * k, z * k, s * Math.sin(a) * k, r()]) } return o })()
+
+  // segmented rings with graduations, as paths round the origin (radii in units of R)
+  let RG = null
+  function buildRings(R) {
+    const seg = (r0, n, gap) => { const p = new Path2D(); for (let i = 0; i < n; i++) { const a0 = i / n * TAU + gap, a1 = (i + 1) / n * TAU - gap; p.moveTo(Math.cos(a0) * r0, Math.sin(a0) * r0); p.arc(0, 0, r0, a0, a1) } return p }
+    const ticks = (r0, n, l, every, l2) => { const p = new Path2D(); for (let i = 0; i < n; i++) { const a = i / n * TAU, ll = i % every ? l : l2; p.moveTo(Math.cos(a) * r0, Math.sin(a) * r0); p.lineTo(Math.cos(a) * (r0 + ll), Math.sin(a) * (r0 + ll)) } return p }
+    const a = seg(R * 1.08, 6, 0.06), b = seg(R * 1.2, 24, 0.03), c = seg(R * 1.33, 3, 0.35)
+    const ta = ticks(R * 1.12, 120, 3, 10, 8), tb = ticks(R * 1.25, 72, 2.5, 6, 6)
+    // bright arc caps on the outer ring
+    const caps = new Path2D(); for (let i = 0; i < 3; i++) { const a0 = i / 3 * TAU + 0.35; caps.moveTo(Math.cos(a0) * R * 1.33, Math.sin(a0) * R * 1.33); caps.arc(0, 0, R * 1.33, a0, a0 + 0.12) }
+    RG = { R, a, b, c, ta, tb, caps }
   }
 
   function sphere(g, cc) {
-    const { cx, cy, R, t, flare, jitter, recent, low } = cc, q = coreGeo(R)
-    // inside the drawing the sheet is a little lighter
-    const fill = g.createRadialGradient(cx, cy - R * 0.25, 0, cx, cy, R)
-    fill.addColorStop(0, `rgba(36,104,160,${0.3 + flare * 0.3})`); fill.addColorStop(1, `rgba(20,78,128,${0.16 + flare * 0.2})`)
-    g.fillStyle = fill; g.beginPath(); g.arc(cx, cy, R, 0, TAU); g.fill()
-    g.translate(cx, cy)
-    // the shell wall in section, hatched
-    g.save(); g.clip(q.wall, 'evenodd'); g.strokeStyle = `rgba(${INK},.22)`; g.lineWidth = 0.8; g.stroke(q.hatch); g.restore()
-    g.lineWidth = 1
-    g.strokeStyle = `rgba(${INK},.32)`; g.beginPath(); g.arc(0, 0, R * 0.9, 0, TAU); g.stroke()
-    g.setLineDash([3, 6]); g.strokeStyle = `rgba(${INK},.2)`; g.stroke(q.inner)
-    g.setLineDash([2, 7]); g.strokeStyle = `rgba(${INK},.22)`; g.beginPath(); g.arc(0, 0, R * 1.3, 0, TAU); g.stroke()
-    // centre lines through the middle
-    g.setLineDash([24, 5, 4, 5]); g.lineDashOffset = -t * 0.9; g.strokeStyle = `rgba(${INK},.34)`; g.stroke(q.centre)
-    g.setLineDash([]); g.lineDashOffset = 0
-    // a protractor scale that turns slowly, a little faster when the agent is busy
-    g.save(); g.rotate(t * (0.004 + Math.min(0.03, recent * 0.002))); g.strokeStyle = `rgba(${INK},.38)`; g.stroke(q.ticks); g.restore()
-    // the outline
-    g.strokeStyle = jitter ? C.red : C.shell; g.lineWidth = 1.5; g.beginPath(); g.arc(0, 0, R, 0, TAU); g.stroke()
-    if (low) return
-    // its diameter, dimensioned on the left
-    const x = -R * 1.2
-    g.strokeStyle = `rgba(${INK},.22)`; g.lineWidth = 0.8; g.beginPath(); g.moveTo(-10, -R); g.lineTo(x - 6, -R); g.moveTo(-10, R); g.lineTo(x - 6, R); g.stroke()
-    dimension(g, x, -R, x, R, `Ø ${Math.round(2 * R)}`, 0.5)
-  }
-
-  // links are thin construction lines; a firing chain is a coloured pen stroke
-  function link(g, x1, y1, x2, y2, color, b) {
-    if (color) { g.strokeStyle = color; g.globalAlpha = 0.4 + 0.6 * b; g.lineWidth = 1.1 + b * 1.4; g.lineCap = 'round' }
-    else { g.strokeStyle = C.link; g.lineWidth = 0.7 }
-    g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke()
-  }
-  // neurons are small drafted circles: hollow when idle, inked when lit
-  function neuron(g, x, y, r, color, b) {
-    g.beginPath(); g.arc(x, y, r + 0.6, 0, TAU)
-    g.fillStyle = color || C.nodeFill; g.fill()
-    g.strokeStyle = color || C.neuron; g.lineWidth = 0.9; g.stroke()
-    if (color && b > 0.5) { g.globalAlpha = b - 0.4; g.beginPath(); g.arc(x, y, r + 4, 0, TAU); g.stroke() }
-  }
-
-  // plan steps read as dimension callouts: a radial line from the drawing out to each step
-  function coreOver(g, cc) {
-    const { cx, cy, R, steps, cur, goal, complete } = cc
-    const list = steps.map((p, i) => ({ x: p.x, y: p.y, col: p.s.status === 'completed' ? C.green : p.s.status === 'failed' ? C.red : i === cur ? cc.fire : null, a: i === cur ? 0.6 : 0.45 }))
-    if (steps.length && goal) list.push({ x: goal.x, y: goal.y, col: complete ? C.green : C.yellow, a: 0.4, goal: true })
-    g.lineWidth = 0.9
-    for (const p of list) {
-      const dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy), ux = dx / d, uy = dy / d, r0 = R * 1.12, r1 = d - (p.goal ? 42 : 15)
-      if (r1 - r0 < 18) continue
-      const ex = cx + ux * r1, ey = cy + uy * r1, sx = cx + ux * r0, sy = cy + uy * r0
-      g.strokeStyle = g.fillStyle = p.col || `rgba(${INK},.3)`; g.globalAlpha = p.col ? p.a : 1
-      g.beginPath(); g.moveTo(sx, sy); g.lineTo(ex, ey)
-      g.moveTo(sx - uy * 5, sy + ux * 5); g.lineTo(sx + uy * 5, sy - ux * 5); g.stroke()   // a tick where it leaves the drawing
-      g.beginPath(); g.moveTo(ex, ey); g.lineTo(ex - ux * 8 - uy * 2.4, ey - uy * 8 + ux * 2.4); g.lineTo(ex - ux * 8 + uy * 2.4, ey - uy * 8 - ux * 2.4); g.fill()
+    const { cx, cy, R, t, flare, jitter, recent, low, fire } = cc
+    const br = 1 + 0.06 * Math.sin(t * TAU / 40) + flare * 0.7
+    // inner light
+    const gl = g.createRadialGradient(cx, cy, 0, cx, cy, R * 1.15)
+    gl.addColorStop(0, `rgba(${ICE},${0.1 * br})`); gl.addColorStop(0.6, `rgba(${CY},${0.045 * br})`); gl.addColorStop(1, `rgba(${CY},0)`)
+    g.fillStyle = gl; g.beginPath(); g.arc(cx, cy, R * 1.15, 0, TAU); g.fill()
+    // turn the globe: a slow spin round a slightly tipped axis
+    const yaw = t * TAU / 120, ca = Math.cos(yaw), sa = Math.sin(yaw), tip = 0.35, ct = Math.cos(tip), st = Math.sin(tip), rr = R * 0.92
+    const P = q => { const x = q[0] * ca + q[2] * sa, z = -q[0] * sa + q[2] * ca, y = q[1] * ct - z * st, z2 = q[1] * st + z * ct; return [cx + x * rr, cy + y * rr, z2] }
+    g.save(); g.globalCompositeOperation = 'lighter'; g.lineCap = 'round'
+    const rings = low ? RINGS.slice(0, 5) : RINGS
+    for (const front of [false, true]) {
+      g.strokeStyle = front ? `rgba(${ICE},${0.32 * br})` : `rgba(${CY},${0.1 * br})`; g.lineWidth = front ? 1 : 0.8; g.beginPath()
+      for (const pts of rings) {
+        let pen = false
+        for (const q of pts) { const p = P(q); if ((p[2] > 0) === front) { pen ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]); pen = true } else pen = false }
+      }
+      g.stroke()
     }
-    g.globalAlpha = 1
+    if (!low) {
+      g.fillStyle = `rgba(${HOT},${0.55 * br})`; g.beginPath()
+      for (const d of DOTS) { const p = P(d), s = 0.5 + 0.9 * (p[2] + 1) / 2 * (0.6 + 0.4 * Math.sin(t * TAU / 20 + d[3] * TAU)); g.moveTo(p[0] + s, p[1]); g.arc(p[0], p[1], s, 0, TAU) }
+      g.fill()
+    }
+    g.restore()
+    // the shell
+    g.beginPath(); g.arc(cx, cy, R, 0, TAU)
+    g.strokeStyle = jitter ? C.red : `rgba(${ICE},.5)`; g.lineWidth = jitter ? 2.5 : 1.2; g.stroke()
+    // rotating segmented rings
+    if (!RG || RG.R !== R) buildRings(R)
+    const rot = (k, p, s, a, w) => { g.save(); g.translate(cx, cy); g.rotate(k); g.strokeStyle = s; g.globalAlpha = a; g.lineWidth = w; g.stroke(p); g.restore() }
+    // busy brightens the rings; it must not change a rotation rate (angle = t * rate would snap when recent changes)
+    const busy = Math.min(1, recent / 15)
+    rot(t * 0.02, RG.a, `rgb(${ICE})`, 0.45 + busy * 0.15 + flare * 0.3, 2)
+    rot(-t * 0.012, RG.ta, `rgb(${CY})`, 0.45, 1)
+    if (!low) {
+      rot(t * 0.007, RG.b, `rgb(${CY})`, 0.35, 1)
+      rot(-t * 0.005, RG.tb, `rgb(${ICE})`, 0.26 + busy * 0.1, 1)
+      rot(t * 0.004, RG.c, `rgb(${CY})`, 0.22, 1)
+      rot(t * 0.004, RG.caps, `rgb(${HOT})`, 0.6, 2.2)
+    }
+    // two small arc gauges: left shows recent activity, right is lit in the colour of the current action
+    const gr = R * 1.42, lvl = Math.min(1, recent / 20)
+    g.lineCap = 'butt'; g.lineWidth = 3
+    g.strokeStyle = `rgba(${CY},.16)`; g.beginPath(); g.arc(cx, cy, gr, Math.PI * 0.85, Math.PI * 1.15); g.stroke()
+    g.beginPath(); g.arc(cx, cy, gr, -Math.PI * 0.15, Math.PI * 0.15); g.stroke()
+    g.strokeStyle = `rgba(${ICE},.75)`; g.beginPath(); g.arc(cx, cy, gr, Math.PI * 1.15 - Math.PI * 0.3 * lvl, Math.PI * 1.15); g.stroke()
+    if (cc.kind) { g.strokeStyle = fire; g.globalAlpha = 0.8; g.beginPath(); g.arc(cx, cy, gr, -Math.PI * 0.15, Math.PI * 0.15); g.stroke(); g.globalAlpha = 1 }
   }
 
-  // the agent: a centre mark, ringed in the colour of what it is doing
+  // thin guide filaments from the hub to the plan steps
+  function coreUnder(g, cc) {
+    const { cx, cy, steps } = cc
+    g.strokeStyle = `rgba(${CY},.12)`; g.lineWidth = 1; g.setLineDash([2, 6]); g.beginPath()
+    for (const p of steps) { g.moveTo(cx, cy); g.lineTo(p.x, p.y) }
+    g.stroke(); g.setLineDash([])
+  }
+
+  // the goal: a warm gold glow with a slowly turning segmented ring
+  function coreOver(g, cc) {
+    const { goal, t, complete, flare, steps } = cc
+    if (!goal || !steps.length) return
+    const rgb = complete ? '120,230,150' : C.goalRGB, k = 1 + 0.06 * Math.sin(t * TAU / 40) + flare
+    g.save(); g.globalCompositeOperation = 'lighter'
+    const gr = g.createRadialGradient(goal.x, goal.y, 0, goal.x, goal.y, 54 * k)
+    gr.addColorStop(0, `rgba(${rgb},.24)`); gr.addColorStop(0.5, `rgba(${rgb},.06)`); gr.addColorStop(1, `rgba(${rgb},0)`)
+    g.fillStyle = gr; g.beginPath(); g.arc(goal.x, goal.y, 54 * k, 0, TAU); g.fill()
+    g.translate(goal.x, goal.y); g.rotate(t * TAU / 160)
+    g.strokeStyle = `rgba(${rgb},.5)`; g.lineWidth = 1.4; g.beginPath()
+    for (let i = 0; i < 4; i++) { const a = i / 4 * TAU; g.moveTo(Math.cos(a) * 44, Math.sin(a) * 44); g.arc(0, 0, 44, a, a + 1.1) }
+    g.stroke(); g.restore()
+  }
+
+  function link(g, x1, y1, x2, y2, color, b) {
+    g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2)
+    if (!color) { g.strokeStyle = C.link; g.lineWidth = 0.7; g.stroke(); return }
+    g.save(); g.globalCompositeOperation = 'lighter'; g.lineCap = 'round'; g.strokeStyle = color
+    g.globalAlpha = 0.18 * b; g.lineWidth = 7 * b + 1; g.stroke()
+    g.globalAlpha = 0.5 + 0.5 * b; g.lineWidth = 0.8 + 1.4 * b; g.stroke()
+    if (b > 0.6) { g.strokeStyle = C.packet; g.globalAlpha = (b - 0.6) * 1.5; g.lineWidth = 0.8; g.stroke() }
+    g.restore()
+  }
+
+  function neuron(g, x, y, r, color, b) {
+    if (!color) {
+      g.fillStyle = C.neuron; g.globalAlpha = 0.7; g.beginPath(); g.arc(x, y, r * 0.8, 0, TAU); g.fill(); g.globalAlpha = 1
+      return
+    }
+    g.save(); g.globalCompositeOperation = 'lighter'; g.fillStyle = color
+    g.globalAlpha = 0.22 * b; g.beginPath(); g.arc(x, y, r * 3.4, 0, TAU); g.fill()
+    g.globalAlpha = 1; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill()
+    if (b > 0.4) { g.fillStyle = C.packet; g.beginPath(); g.arc(x, y, r * 0.5, 0, TAU); g.fill() }
+    g.restore()
+  }
+
+  // the hub: a white-hot core in a thin ring with four marks
   function coreCenter(g, cc) {
-    const { cx, cy, t, kind, flare } = cc
-    g.translate(cx, cy)
-    g.fillStyle = '#0a2f52'; g.beginPath(); g.arc(0, 0, 14, 0, TAU); g.fill()
-    g.strokeStyle = kind === 'error' ? C.red : '#cfe8ff'; g.lineWidth = 1.5; g.stroke()
-    g.beginPath(); g.moveTo(-26, 0); g.lineTo(-17, 0); g.moveTo(17, 0); g.lineTo(26, 0); g.moveTo(0, -26); g.lineTo(0, -17); g.moveTo(0, 17); g.lineTo(0, 26); g.moveTo(-5, 0); g.lineTo(5, 0); g.moveTo(0, -5); g.lineTo(0, 5); g.stroke()
-    g.fillStyle = C.yellow; g.globalAlpha = 0.85 + 0.15 * flare; g.beginPath(); g.arc(0, 0, 2.2, 0, TAU); g.fill(); g.globalAlpha = 1
-    if (kind) { g.rotate(t * 0.25); g.strokeStyle = cc.fire; g.lineWidth = 1.6; g.setLineDash([7, 5]); g.beginPath(); g.arc(0, 0, 20, 0, TAU); g.stroke(); g.setLineDash([]) }
+    const { cx, cy, t } = cc, k = 1 + 0.08 * Math.sin(t * TAU / 30)
+    g.save(); g.globalCompositeOperation = 'lighter'
+    const halo = g.createRadialGradient(cx, cy, 0, cx, cy, 40 * k)
+    halo.addColorStop(0, `rgba(${HOT},.75)`); halo.addColorStop(0.18, `rgba(${ICE},.35)`); halo.addColorStop(1, `rgba(${CY},0)`)
+    g.fillStyle = halo; g.beginPath(); g.arc(cx, cy, 40 * k, 0, TAU); g.fill()
+    g.translate(cx, cy); g.rotate(-t * TAU / 60)
+    g.strokeStyle = `rgba(${ICE},.7)`; g.lineWidth = 1.2; g.beginPath(); g.arc(0, 0, 16, 0, TAU)
+    for (let i = 0; i < 4; i++) { const a = i / 4 * TAU; g.moveTo(Math.cos(a) * 19, Math.sin(a) * 19); g.lineTo(Math.cos(a) * 25, Math.sin(a) * 25) }
+    g.stroke(); g.restore()
+    g.fillStyle = '#f2fdff'; g.beginPath(); g.arc(cx, cy, 4.5, 0, TAU); g.fill()
   }
 
   registerTheme({
-    id: 'blueprint',
-    name: 'Blueprint',
+    id: 'holoprint',
+    name: 'Holo blueprint',
     light: false,
-    fontUrl: 'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap',
-    fonts: { mono: '"IBM Plex Mono", ui-monospace, monospace', head: '"Space Mono", "IBM Plex Mono", monospace' },
+    fontUrl: 'https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap',
+    fonts: { mono: '"JetBrains Mono", ui-monospace, monospace', head: 'Rajdhani, "Helvetica Neue", sans-serif' },
+    webSilk: true,
     css: {
-      '--bg': '#0b355d', '--panel': 'rgba(8,40,72,.9)', '--panel2': '#082a4a', '--line': '#3d6d9e',
-      '--cyan': '#62d6ff', '--yellow': '#ffdf6b', '--red': '#ff5a5f', '--green': '#7ee8a0', '--purple': '#e09cff',
-      '--amber': '#ffa64d', '--blue': '#8aa6ff', '--dim': '#92b5dc', '--text': '#eaf4ff', '--muted': '#b4cdea',
-      '--mono': "'IBM Plex Mono', ui-monospace, Menlo, monospace", '--head': "'Space Mono', 'IBM Plex Mono', monospace",
-      '--radius': '2px', '--clip': 'none',
+      '--bg': '#0b355d', '--panel': 'rgba(4,20,40,.9)', '--panel2': '#051a33', '--line': '#2a6a94',
+      '--cyan': '#3fdcff', '--yellow': '#ffc454', '--red': '#ff4d5e', '--green': '#5ef0a0', '--purple': '#e09cff',
+      '--amber': '#ff9a3c', '--blue': '#a3b8ff', '--dim': '#93b9d4', '--text': '#e4f7ff', '--muted': '#a9cfe3',
+      '--mono': "'JetBrains Mono', ui-monospace, Menlo, monospace", '--head': "Rajdhani, 'Helvetica Neue', sans-serif",
+      '--radius': '4px', '--clip': 'none',
     },
     colors: {
-      bg: '#0b355d', cyan: '#62d6ff', yellow: '#ffdf6b', red: '#ff5a5f', green: '#7ee8a0', purple: '#e09cff', amber: '#ffa64d', blue: '#8aa6ff',
-      dim: '#92b5dc', line: '#3d6d9e', text: '#eaf4ff',
-      muted: '#b4cdea', todo: '#7a9cc4', doneInk: '#c3f0d0', ink2: '#ffffff', nodeFill: '#0b3a63', chip: 'rgba(8,38,68,.8)', labelBg: 'rgba(8,38,68,.95)',
-      link: 'rgba(207,232,255,.17)', neuron: 'rgba(207,232,255,.72)', shell: 'rgba(207,232,255,.78)', wire: 'rgba(207,232,255,.1)', packet: '#ffffff',
-      accentRGB: '98,214,255', goalRGB: '255,223,107', tickRGB: '207,232,255', glow0: '120,190,240', glow1: '40,110,170', glow2: '13,59,102',
+      bg: '#0b355d', cyan: '#3fdcff', yellow: '#ffc454', red: '#ff4d5e', green: '#5ef0a0', purple: '#e09cff', amber: '#ff9a3c', blue: '#a3b8ff',
+      dim: '#93b9d4', line: '#2a6a94', text: '#e4f7ff',
+      muted: '#a9cfe3', todo: '#86accb', doneInk: '#b8f7d2', ink2: '#f2fdff', nodeFill: '#06213f', chip: 'rgba(4,20,40,.82)', labelBg: 'rgba(4,20,40,.94)',
+      link: 'rgba(0,210,255,.2)', neuron: '#7fe9ff', shell: 'rgba(127,233,255,.55)', wire: 'rgba(0,210,255,.14)', packet: '#f2fdff',
+      accentRGB: '63,220,255', goalRGB: '255,196,84', tickRGB: '127,233,255', glow0: '127,233,255', glow1: '0,210,255', glow2: '0,60,110',
     },
-    webSilk: false,
-    backdrop, sphere, link, neuron, coreOver, coreCenter,
+    backdrop, sphere, coreUnder, coreOver, link, neuron, coreCenter,
   })
 })()

@@ -9,7 +9,8 @@ import { bump, costOf } from './metrics'
 import { narrate, pushUpdate } from './narrate'
 import { findLocalUrl, takeSnapshot } from './site'
 import { nextPlan } from './plan'
-import { foundServers, makeTempDir, openMiniWindow, openWebWindow, scanServers, sitePreview, startWeb, webSnapshot, webUp, writeWebState } from './web'
+import { type HeadroomBase, type Pairings, readPairings } from './pairings'
+import { foundServers, makeTempDir, type MiniHow, openMiniWindow, openWebWindow, scanServers, sitePreview, startWeb, WEB_PORT, webSnapshot, webUp, writeWebState } from './web'
 import type { ScreenProps } from './screen'
 
 export { testCounts, toCode, viewLines } from './lib'
@@ -31,6 +32,8 @@ const sites = atom({ plugin: 'live-view', key: 'sites' } as const, {} as Record<
 const siteMode = atom({ plugin: 'live-view', key: 'siteMode' } as const, 'tiles' as SiteMode, { shape: 'siteMode-1' })
 /** Whether the Agent Web window was opened this session: its server restarts after a reload. */
 const webOn = atom({ plugin: 'live-view', key: 'webOn' } as const, false, { shape: 'webOn-1' })
+// Headroom's first reading this session: kept in state so a mod reload does not restart the count
+const headroomBase = atom({ plugin: 'live-view', key: 'headroomBase' } as const, null as HeadroomBase | null, { shape: 'headroomBase-1' })
 /** The app's own browser pane, when this session has it. */
 const BROWSER_TOOL = 'mcp__Claude_Browser__preview_start'
 /** Wait this long after an edit before a snapshot, so a burst of edits takes one. */
@@ -273,16 +276,21 @@ async function openWeb($: EngineInterface): Promise<string> {
     : `Agent Web opened in your browser (${address}).`
 }
 
+const MINI_SAYS: Record<MiniHow, string> = {
+  native: 'Mini monitor opened in the bottom-right corner. It stays above other windows; drag its title bar to move it, its edges to resize. Click the banner there to jump back to Claude.',
+  chrome: 'Mini monitor opened as a small browser window, which cannot stay on top.',
+  browser: 'Mini monitor opened in your browser (no Chrome found), which cannot stay on top.',
+  'no-tools': 'Mini monitor opened as a small browser window. To keep it above other windows, install the Xcode Command Line Tools (xcode-select --install) and open it again.',
+  'build-failed': 'Mini monitor opened as a small browser window: the native window would not build. Run claude --debug for the compiler output.',
+}
+
 /** Starts the Agent Web server if needed and opens the small always-on-top monitor. */
 async function openMini($: EngineInterface): Promise<string> {
   const address = await startWeb($)
   if (!address) return 'The Agent Web needs python3 to serve its page, and it could not start.'
   await update($, webOn, () => true)
   await webTick($)
-  const how = await openMiniWindow($, address)
-  return how === 'native'
-    ? 'Mini monitor opened in the bottom-right corner. It stays above other windows; drag its title bar to move it, its edges to resize. Click the banner there to jump back to Claude.'
-    : 'Mini monitor opened as a small Chrome window (swiftc was not available, so it cannot stay on top).'
+  return MINI_SAYS[await openMiniWindow($, address)]
 }
 
 // The kind each agent was last told about, so a pop-up says it once.
@@ -292,6 +300,8 @@ const alerted = new Map<string, string>()
 let dialogsSeen = false
 let mode: string | undefined
 const AUTO_MODES = new Set(['auto', 'bypassPermissions', 'dontAsk'])
+/** Tools whose whole call is the person's turn: a question, a plan to approve. */
+const ASKS_PERSON = new Set(['AskUserQuestion', 'ExitPlanMode'])
 /** A pop-up when an agent gets stuck, struggles or runs long. Approvals are left out: Claude Code already asks in the chat. */
 async function alertTick($: EngineInterface) {
   const now = await $.clock.now()
@@ -303,10 +313,12 @@ async function alertTick($: EngineInterface) {
 }
 
 /** Writes the page's state file when anything changed. */
+// what readPairings last found; shown in the Agent Web's header
+let pairings: Pairings = { modes: [] }
 async function webTick($: EngineInterface) {
   if (!webUp()) return
   const all = await read($, agents)
-  await writeWebState($, { ...webSnapshot(all, await read($, sites), await read($, series), await $.clock.now()), preview: await sitePreview($, all), servers: foundServers() })
+  await writeWebState($, { ...webSnapshot(all, await read($, sites), await read($, series), await $.clock.now()), preview: await sitePreview($, all), servers: foundServers(), pairings })
 }
 
 const TEAM_OPEN = { id: TEAM, title: 'Agent team', focus: true, columns: 220, rows: 48 } as const
@@ -376,9 +388,16 @@ export const register: Register = (on, options) => {
     })
     $.clock.every(500, () => void webTick($).catch(() => undefined))
     $.clock.every(15_000, () => void scanServers($).catch(() => undefined))
+    // Headroom and the Caveman / Ponytail modes, while the Agent Web is open
+    $.clock.every(15_000, () => void (async () => {
+      if (!webUp()) return
+      const was = await read($, headroomBase), r = await readPairings($, was ?? undefined)
+      pairings = r.pairings
+      if (!was && r.base) await update($, headroomBase, () => r.base!)
+    })().catch(() => undefined))
     $.clock.every(3000, () => void alertTick($).catch(() => undefined))
-    // After a reload the window is still open: bring its server back on the same port.
-    if (await read($, webOn)) void startWeb($).catch(() => undefined)
+    // After a reload the window is still open: bring its server back on the same port. On another port the open windows are stranded.
+    if (await read($, webOn)) void startWeb($).then(u => { if (u && !u.includes(`:${WEB_PORT}/`)) $.ui.toast('Agent Web restarted on a new address. Run /agent-web or /agent-mini to reopen its windows.') }).catch(() => undefined)
     return next(e)
   })
 
@@ -498,7 +517,9 @@ export const register: Register = (on, options) => {
     // What the screen shows while the tool runs: the command typed, the page loading.
     const pending = kind === 'run' ? termScreen(target, undefined, true) : kind === 'browse' ? browserScreen(target, undefined, true) : undefined
 
-    await patch($, id, step.at, ag => ({ ...ag, status: 'working', steps: [...ag.steps, step].slice(-100), screen: pending ?? ag.screen }))
+    // a question or a plan to approve waits on the person for as long as the call runs
+    const asksPerson = ASKS_PERSON.has(e.tool) ? { waiting: { since: step.at, tool: e.tool, id: e.tool_use_id, person: true } } : {}
+    await patch($, id, step.at, ag => ({ ...ag, status: 'working', steps: [...ag.steps, step].slice(-100), screen: pending ?? ag.screen, ...asksPerson }))
 
     const ran = await next(e)
     const output = ran.deny ?? ran.text ?? ''
